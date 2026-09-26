@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NDR MIS Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <h1>NDR MIS</h1>
+      <select id="sheetSelect" aria-label="Sheet tab">
+        <option value="MIS-2025">MIS-2025</option>
+        <option value="MIS-HOD-2025">MIS-HOD-2025</option>
+      </select>
+      <select id="weekRange" aria-label="Weeks to show">
+        <option value="2w">Last 2 weeks</option>
+        <option value="4w">Last 4 weeks</option>
+        <option value="2">Last 2 months</option>
+        <option value="3">Last 3 months</option>
+        <option value="all">All weeks</option>
+      </select>
+    </div>
+
+    <div class="sync">
+      <span id="syncDot" class="dot" aria-hidden="true"></span>
+      <span id="syncText">Connecting to sheet…</span>
+      <button id="refreshBtn" class="btn">Refresh now</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Employee roster -->
+    <aside class="roster">
+      <div class="roster-head">
+        <input id="empSearch" type="search" placeholder="Search employee" aria-label="Search employee" />
+        <select id="empSort" aria-label="Sort employees">
+          <option value="name">Sort: Name</option>
+          <option value="completion">Sort: Completion</option>
+          <option value="delay">Sort: Delay</option>
+          <option value="planned">Sort: Planned tasks</option>
+        </select>
+      </div>
+      <button class="roster-item all" data-emp="__ALL__">
+        <span class="r-name">All employees</span>
+        <span class="r-meta" id="allMeta"></span>
+      </button>
+      <div id="rosterList" class="roster-list"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-view="sheet" role="tab">Sheet view</button>
+        <button class="tab" data-view="overview" role="tab">Overview</button>
+        <button class="tab" data-view="employee" role="tab">Employee report</button>
+      </nav>
+
+      <div id="errorBox" class="error" hidden></div>
+
+      <!-- OVERVIEW -->
+      <section id="view-overview" class="view">
+        <div class="kpis" id="kpis"></div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Planned vs done, by employee</h2>
+          </div>
+          <div class="chart-wrap tall"><canvas id="teamChart"></canvas></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head"><h2>Highest not-done gap</h2></div>
+            <ol id="worstList" class="rank"></ol>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Task areas across the team</h2></div>
+            <div class="table-wrap"><table id="areaTable" class="data"></table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EMPLOYEE -->
+      <section id="view-employee" class="view">
+        <div id="empEmpty" class="empty">Pick an employee from the list on the left to see their report.</div>
+        <div id="empReport" hidden>
+          <div class="emp-header">
+            <h2 id="empName"></h2>
+            <p id="empSub" class="muted"></p>
+          </div>
+          <div class="kpis" id="empKpis"></div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Task areas</h2></div>
+            <div class="table-wrap"><table id="empTable" class="data"></table></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Weekly report</h2>
+              <div class="controls">
+                <label class="check"><input type="checkbox" id="onlyFilledRows" /> Only rows with entries</label>
+              </div>
+            </div>
+            <p class="muted small" id="weekInfo"></p>
+            <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
+            <p class="muted small hint">Kisi bhi cell par click karke comment likho. Kone mein neeli nishani = comment hai.</p>
+            <div class="table-wrap week-wrap"><table id="weekTable" class="week"></table></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Comments</h2></div>
+            <ul id="empComments" class="comments"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SHEET VIEW -->
+      <section id="view-sheet" class="view active">
+        <div class="panel sheet-panel">
+          <div class="panel-head">
+            <h2>Sheet view</h2>
+            <div class="controls">
+              <input id="sheetSearch" type="search" placeholder="Search name / task" aria-label="Search rows" />
+              <label class="check"><input type="checkbox" id="hideEmpty" /> Hide empty rows</label>
+              <button id="downloadCsv" class="btn ghost">Download CSV</button>
+            </div>
+          </div>
+          <p class="muted small" id="sheetCount"></p>
+          <p class="muted small hint">Kisi bhi cell par click karke comment likho, wo Google Sheet mein usi cell par note ban jaayega. Kone mein neeli nishani = comment hai.</p>
+          <div class="table-wrap sheet-wrap"><table id="sheetTable" class="week sheet"></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="commentDialog" class="cm-dialog">
+    <h3 id="cmTitle"></h3>
+    <p id="cmContext" class="muted small"></p>
+    <div class="cm-label">Current comment (sheet mein yahi dikhta hai)</div>
+    <pre id="cmExisting" class="cm-existing"></pre>
+    <label class="cm-label" for="cmText">Naya comment</label>
+    <textarea id="cmText" rows="3" maxlength="1500" placeholder="Yahan likho… (Ctrl+Enter se save)"></textarea>
+    <label class="cm-label" for="cmName">Aapka naam</label>
+    <input id="cmName" type="text" placeholder="e.g. Ashish" />
+    <p id="cmStatus" class="cm-status" role="status"></p>
+    <div class="cm-actions">
+      <button id="cmDelete" class="btn danger" type="button">Delete comment</button>
+      <span class="spacer"></span>
+      <button id="cmCancel" class="btn ghost" type="button">Cancel</button>
+      <button id="cmSave" class="btn primary" type="button">Save comment</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
