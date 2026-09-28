@@ -27,6 +27,8 @@ const state = {
   loading: false,
   edits: new Map(),       // "r:c" -> { r, c, area, value } (abhi save nahi hue)
   saving: false,
+  saved: new Map(),       // "r:c" -> { r, c, value, at } (save ho gaye, sheet se confirm hone tak)
+  reloadAfter: false,
 };
 
 const $ = (s) => document.querySelector(s);
@@ -684,8 +686,9 @@ async function saveEdits() {
   let ok = 0, fail = 0, lastErr = "";
   for (const [key, e] of [...state.edits]) {
     try {
-      await callScript({ action: "value", sheet: state.sheet, row: e.r, col: e.c, areaCol: state.data.cols.area, area: e.area, value: e.value });
+      const res = await callScript({ action: "value", sheet: state.sheet, row: e.r, col: e.c, areaCol: state.data.cols.area, area: e.area, value: e.value });
       state.edits.delete(key);
+      state.saved.set(key, { r: e.r, c: e.c, value: res.value ?? e.value, at: Date.now() });
       ok++;
     } catch (err) {
       e.error = err.message;
@@ -694,10 +697,27 @@ async function saveEdits() {
     }
   }
   state.saving = false;
+  applySaved(state.data);
   renderAll();
   toast(fail ? `${ok} save hue, ${fail} nahi hue: ${lastErr.split("\n")[0]}` : `${ok} value sheet mein save ho gayi.`);
   state.signature = "";
-  load({ silent: true });
+  if (state.loading) state.reloadAfter = true; // chal raha load purana data laayega, uske baad dobara
+  else load({ silent: true });
+}
+
+// save hui values dashboard par turant dikhao; jab tak sheet se aaya data unhe confirm na kare
+// (purana/beech mein chala load unhe mita na de), 2 minute tak upar se lagao
+function applySaved(d) {
+  if (!d) return;
+  for (const [key, s] of state.saved) {
+    const row = d.rows.find((x) => x.gridRow === s.r);
+    const wi = d.weeks.findIndex((w) => s.c >= w.col && s.c < w.col + 4);
+    if (!row || wi === -1) { state.saved.delete(key); continue; }
+    const k = METRICS[s.c - d.weeks[wi].col].k;
+    const want = num(s.value);
+    if (row.weekly[wi][k] === want || Date.now() - s.at > 120000) { state.saved.delete(key); continue; }
+    row.weekly[wi][k] = want;
+  }
 }
 
 /* =====================================================================
@@ -715,7 +735,8 @@ async function load({ silent = false } = {}) {
     const changed = state.signature && sig !== state.signature;
     if (sig !== state.signature) {
       state.data = parseGrid(res.values || [], res.notes || [], { hiddenCols: res.hiddenCols, teamMerges: res.teamMerges });
-      state.signature = sig;
+      applySaved(state.data);
+      state.signature = state.saved.size ? "" : sig; // abhi confirm nahi hua to agli baar bhi dobara parse
       if (!state.data.rows.length) {
         showError(`"${state.sheet}" tab mein Team / Result in area ke neeche koi data nahi mila. Upar dropdown se doosra tab chuno.`);
       } else hideError();
@@ -736,6 +757,7 @@ async function load({ silent = false } = {}) {
     showError(err.message);
   } finally {
     state.loading = false;
+    if (state.reloadAfter) { state.reloadAfter = false; load({ silent: true }); }
   }
 }
 
