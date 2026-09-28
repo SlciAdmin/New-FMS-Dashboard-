@@ -88,13 +88,15 @@ function getLayoutInfo(sh, values) {
 }
 
 /* ---------------- WRITE HELPERS ---------------- */
+// row/col/areaCol naye naam hain (r + c saath bhejne par Google 400 error deta tha); r/c/ac purane client ke liye
 function targetCell(sh, p) {
-  const r = parseInt(p.r, 10), c = parseInt(p.c, 10);
+  const r = parseInt(p.row !== undefined ? p.row : p.r, 10), c = parseInt(p.col !== undefined ? p.col : p.c, 10);
   if (!(r >= 0 && c >= 0)) throw new Error("Galat cell");
+  const ac = p.areaCol !== undefined ? p.areaCol : p.ac;
 
   // safety: row abhi bhi wahi task area hai na?
-  if (p.area && p.ac !== undefined) {
-    const now = String(sh.getRange(r + 1, parseInt(p.ac, 10) + 1).getDisplayValue()).trim();
+  if (p.area && ac !== undefined) {
+    const now = String(sh.getRange(r + 1, parseInt(ac, 10) + 1).getDisplayValue()).trim();
     if (now !== String(p.area).trim()) {
       throw new Error("Sheet mein rows badal gayi hain (yahan ab \"" + now + "\" hai). Refresh karke dobara likho.");
     }

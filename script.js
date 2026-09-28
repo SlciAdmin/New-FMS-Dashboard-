@@ -678,20 +678,21 @@ async function saveEdits() {
   if (state.saving || !state.edits.size) return;
   state.saving = true;
   updateSaveBar();
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, lastErr = "";
   for (const [key, e] of [...state.edits]) {
     try {
-      await callScript({ action: "value", sheet: state.sheet, r: e.r, c: e.c, ac: state.data.cols.area, area: e.area, value: e.value });
+      await callScript({ action: "value", sheet: state.sheet, row: e.r, col: e.c, areaCol: state.data.cols.area, area: e.area, value: e.value });
       state.edits.delete(key);
       ok++;
     } catch (err) {
       e.error = err.message;
+      lastErr = err.message;
       fail++;
     }
   }
   state.saving = false;
   renderAll();
-  toast(fail ? `${ok} save hue, ${fail} nahi hue (laal cell par mouse le jao)` : `${ok} value sheet mein save ho gayi.`);
+  toast(fail ? `${ok} save hue, ${fail} nahi hue: ${lastErr.split("\n")[0]}` : `${ok} value sheet mein save ho gayi.`);
   state.signature = "";
   load({ silent: true });
 }
