@@ -108,7 +108,7 @@
             </div>
             <p class="muted small" id="weekInfo"></p>
             <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
-            <p class="muted small hint">Kisi bhi cell par click karke comment likho. Kone mein neeli nishani = comment hai.</p>
+            <p class="muted small hint">Score / Commitment ke kisi bhi cell par click karke value likho, phir neeche Save dabao.</p>
             <div class="table-wrap week-wrap"><table id="weekTable" class="week"></table></div>
           </div>
 
@@ -131,30 +131,16 @@
             </div>
           </div>
           <p class="muted small" id="sheetCount"></p>
-          <p class="muted small hint">Kisi bhi cell par click karke comment likho, wo Google Sheet mein usi cell par note ban jaayega. Kone mein neeli nishani = comment hai.</p>
+          <p class="muted small hint">Score / Commitment ke kisi bhi cell par click karke value likho, phir neeche Save dabao. Value seedha Google Sheet ke usi cell mein jaayegi.</p>
           <div class="table-wrap sheet-wrap"><table id="sheetTable" class="week sheet"></table></div>
         </div>
       </section>
     </main>
   </div>
 
-  <dialog id="commentDialog" class="cm-dialog">
-    <h3 id="cmTitle"></h3>
-    <p id="cmContext" class="muted small"></p>
-    <div class="cm-label">Current comment (sheet mein yahi dikhta hai)</div>
-    <pre id="cmExisting" class="cm-existing"></pre>
-    <label class="cm-label" for="cmText">Naya comment</label>
-    <textarea id="cmText" rows="3" maxlength="1500" placeholder="Yahan likho… (Ctrl+Enter se save)"></textarea>
-    <label class="cm-label" for="cmName">Aapka naam</label>
-    <input id="cmName" type="text" placeholder="e.g. Ashish" />
-    <p id="cmStatus" class="cm-status" role="status"></p>
-    <div class="cm-actions">
-      <button id="cmDelete" class="btn danger" type="button">Delete comment</button>
-      <span class="spacer"></span>
-      <button id="cmCancel" class="btn ghost" type="button">Cancel</button>
-      <button id="cmSave" class="btn primary" type="button">Save comment</button>
-    </div>
-  </dialog>
+  <div id="saveBar" class="save-bar" hidden>
+    <button id="saveBtn" class="btn primary" type="button">Save</button>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

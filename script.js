@@ -3,7 +3,7 @@
    ===================================================================== */
 
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxR96fCPd-Gzy4LzN-BuHGGenqpdPzhd8NxA6GEmE0ASWDSQVnFgcKn8t6Tp7xx8QF1/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyf8SL-6ggmZJgvHwe4-6qypbBje_jQc54fZuJgUGFYYmctYXh3Pl1isoHrSCl6jG-f/exec",
   SCRIPT_KEY: "ndr-mis-8472-xyz",   // Code.gs wala SECRET_KEY (dono jagah same)
   DEFAULT_SHEET: "MIS-2025",
   REFRESH_SECONDS: 60,              // kitne second mein sheet dobara check ho
@@ -25,7 +25,8 @@ const state = {
   charts: {},
   timer: null,
   loading: false,
-  comment: null,          // modal target
+  edits: new Map(),       // "r:c" -> { r, c, area, value } (abhi save nahi hue)
+  saving: false,
 };
 
 const $ = (s) => document.querySelector(s);
@@ -51,13 +52,14 @@ async function callScript(params) {
     console.warn("fetch failed, trying JSONP", e);
     try {
       json = await jsonp(url);
-    } catch {
+    } catch (e2) {
       throw new Error(
-        "Apps Script se connect nahi hua. Check karo:\n" +
+        `Apps Script se connect nahi hua (${e.message || e} / ${e2.message || e2}). Check karo:\n` +
         "1) Internet chal raha hai\n" +
         "2) SCRIPT_URL sahi hai aur '/exec' par khatam hota hai\n" +
         "3) Deploy settings: 'Execute as: Me', 'Who has access: Anyone'\n" +
-        "4) Code.gs badla to 'New version' se dobara deploy kiya"
+        "4) Code.gs badla to 'New version' se dobara deploy kiya\n" +
+        "5) Netlify / GitHub Pages par latest script.js deploy hai"
       );
     }
   }
@@ -253,7 +255,6 @@ const fmt = (x) => (x === null || x === undefined ? "–" : Number.isInteger(x) 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 const tone = (c) => (c === null ? "" : c >= 0.9 ? "good" : c >= 0.7 ? "warn" : "bad");
 const toneBar = (c) => (c === null ? "" : c >= 0.9 ? "" : c >= 0.7 ? "mid" : "low");
-const lastLine = (t) => { const l = String(t).trim().split("\n"); return l[l.length - 1]; };
 
 function renderAll() {
   if (!state.data) return;
@@ -261,6 +262,7 @@ function renderAll() {
   renderOverview();
   if (state.selectedEmp !== "__ALL__") renderEmployee();
   renderSheetView();
+  updateSaveBar();
 }
 
 function kpiHTML(items) {
@@ -366,20 +368,12 @@ function renderEmployee() {
     { v: pct(e.delayRate), l: "Delay rate", tone: e.delayRate > 0.2 ? "bad" : e.delayRate > 0.05 ? "warn" : "good" },
   ]);
 
-  // Task areas: bilkul sheet jaise columns (Team ke bina) + Comment
+  // Task areas: bilkul sheet jaise columns (Team ke bina)
   const d = state.data, ac = d.cols.area;
   const cols = d.displayCols.filter(({ c }) => c !== d.cols.team);
   $("#empTable").innerHTML = `
-    <thead><tr>${cols.map(({ c, h }) => `<th class="${c === ac ? "" : "num"}">${esc(h)}</th>`).join("")}<th>Comment</th></tr></thead>
-    <tbody>${e.rows.map((r) => {
-      const note = noteAt(r.gridRow, ac);
-      return `<tr>${cols.map(({ c }) => sheetCell(r, c, r.raw[c])).join("")}
-        <td class="comment-cell">
-          <button class="cmt-btn ${note ? "has" : ""}" data-r="${r.gridRow}" data-c="${ac}" title="${esc(note || "Add comment")}">
-            💬 ${note ? esc(lastLine(note).slice(0, 38)) + (lastLine(note).length > 38 ? "…" : "") : "Add"}
-          </button>
-        </td></tr>`;
-    }).join("")}</tbody>`;
+    <thead><tr>${cols.map(({ c, h }) => `<th class="${c === ac ? "" : "num"}">${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${e.rows.map((r) => `<tr>${cols.map(({ c }) => sheetCell(r, c, r.raw[c])).join("")}</tr>`).join("")}</tbody>`;
 
   renderWeekly(e);
   renderEmpComments(e);
@@ -463,11 +457,7 @@ function renderWeekly(e) {
       <tr>${head3}</tr>
     </thead>
     <tbody>${rows.map((r) => `<tr><th class="area">${esc(r.area)}</th>${idx.map((i) => METRICS.map((m) => {
-      const v = r.weekly[i][m.k];
-      const c = weeks[i].col + m.off;
-      const note = noteAt(r.gridRow, c);
-      const cls = [v === null ? "" : v === 0 ? "ok" : "bad", note ? "has-note" : "", m.off === 3 ? "wk-end" : ""].join(" ");
-      return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" tabindex="0" title="${esc(note || "Click karke comment likho")}">${v === null ? "" : fmtWeekVal(v)}</td>`;
+      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], m.off === 3 ? "wk-end" : "");
     }).join("")).join("")}</tr>`).join("")}</tbody>`;
 }
 
@@ -495,7 +485,7 @@ function renderEmpComments(e) {
         <div class="cm-ctx">${esc(it.ctx)}</div>
         <div class="cm-text">${esc(it.text)}</div>
       </li>`).join("")
-    : `<li class="muted">Abhi koi comment nahi hai. Task table ya weekly table mein kisi cell par click karke likho.</li>`;
+    : `<li class="muted">Abhi koi comment nahi hai.</li>`;
 }
 
 function cellContext(row, c) {
@@ -507,7 +497,7 @@ function cellContext(row, c) {
 }
 
 /* ---- ek fixed cell sheet jaisa ---- */
-function sheetCell(r, c, value) {
+function sheetCell(r, c, value, extra = "") {
   const d = state.data;
   const n = num(value);
   const isPct = c === d.cols.notDonePct || c === d.cols.delayPct;
@@ -516,10 +506,23 @@ function sheetCell(r, c, value) {
     c === d.cols.team ? "st-team" : "", c === d.cols.area ? "st-area" : "",
     isPct && n !== null ? (n === 0 ? "ok" : n < 0 ? "bad" : "") : "",
     n !== null && c !== d.cols.team && c !== d.cols.area ? "num" : "",
-    note ? "has-note" : "",
+    note ? "has-note" : "", extra,
   ].join(" ");
   const content = /^https?:\/\//i.test(value) ? `<a href="${esc(value)}" target="_blank" rel="noopener">Click Here</a>` : esc(value);
-  return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" title="${esc(note || "Click karke comment likho")}">${content}</td>`;
+  return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}"${note ? ` title="${esc(note)}"` : ""}>${content}</td>`;
+}
+
+/* ---- ek weekly (Score / Commitment) cell: click karke value likho ---- */
+const origValue = (v) => (v === null ? "" : fmtWeekVal(v).replace(/,/g, ""));
+
+function weekCell(r, c, v, extra = "") {
+  const edit = state.edits.get(`${r.gridRow}:${c}`);
+  const note = noteAt(r.gridRow, c);
+  const shown = edit ? edit.value : origValue(v);
+  const n = edit ? num(edit.value) : v;
+  const cls = [n === null ? "" : n === 0 ? "ok" : "bad", note ? "has-note" : "", edit ? "edited" : "", edit && edit.error ? "err" : "", "editable", extra].join(" ");
+  const title = edit && edit.error ? edit.error : note || "Click karke value likho";
+  return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" data-orig="${esc(origValue(v))}" tabindex="0" title="${esc(title)}">${esc(shown)}</td>`;
 }
 
 /* ---- sheet view (Google Sheet jaisa) ---- */
@@ -544,8 +547,10 @@ function renderSheetView() {
     `${rows.length} rows${state.selectedEmp !== "__ALL__" ? ` · ${state.selectedEmp}` : ""}` +
     (idx.length ? ` · weeks: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}` : "");
 
-  const head1 = fixed.map(({ h, c }) =>
-    `<th rowspan="3" class="fx ${c === d.cols.team ? "st-team" : c === d.cols.area ? "st-area" : ""}">${esc(h)}</th>`).join("")
+  // Link tak ke columns freeze: har fixed column ko fx-<n> class, left position baad mein naap ke
+  const fxCls = (k) => `fx fx-${k}${k === fixed.length - 1 ? " fx-last" : ""}`;
+  const head1 = fixed.map(({ h, c }, k) =>
+    `<th rowspan="3" class="${fxCls(k)} ${c === d.cols.team ? "st-team" : c === d.cols.area ? "st-area" : ""}">${esc(h)}</th>`).join("")
     + idx.map((i) => `<th colspan="4" class="wk wk-end">${esc(weeks[i].label)}</th>`).join("");
   const head2 = idx.map(() => `<th colspan="2" class="sub">Score</th><th colspan="2" class="sub wk-end">Commitment</th>`).join("");
   const head3 = idx.map(() => `<th>Not done</th><th>Delay</th><th>Not done</th><th class="wk-end">Delay</th>`).join("");
@@ -554,13 +559,9 @@ function renderSheetView() {
   const body = rows.map((r) => {
     const first = r.team !== prevTeam;
     prevTeam = r.team;
-    const cells = fixed.map(({ c }) => sheetCell(r, c, c === d.cols.team ? (first ? r.team : "") : r.raw[c])).join("");
+    const cells = fixed.map(({ c }, k) => sheetCell(r, c, c === d.cols.team ? (first ? r.team : "") : r.raw[c], fxCls(k))).join("");
     const wk = idx.map((i) => METRICS.map((m) => {
-      const v = r.weekly[i][m.k];
-      const c = weeks[i].col + m.off;
-      const note = noteAt(r.gridRow, c);
-      const cls = [v === null ? "" : v === 0 ? "ok" : "bad", note ? "has-note" : "", m.off === 3 ? "wk-end" : "", "wcell"].join(" ");
-      return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" title="${esc(note || "Click karke comment likho")}">${v === null ? "" : fmtWeekVal(v)}</td>`;
+      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], (m.off === 3 ? "wk-end " : "") + "wcell");
     }).join("")).join("");
     return `<tr class="${first ? "grp" : ""}">${cells}${wk}</tr>`;
   }).join("");
@@ -568,6 +569,18 @@ function renderSheetView() {
   $("#sheetTable").innerHTML = `
     <thead><tr>${head1}</tr><tr>${head2}</tr><tr>${head3}</tr></thead>
     <tbody>${body || `<tr><td class="muted" colspan="20">Koi row nahi mili.</td></tr>`}</tbody>`;
+  freezeFixedCols();
+}
+
+// fixed columns ki chaudai naap ke har ek ka sticky "left" set karo
+function freezeFixedCols() {
+  const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];
+  if (!ths.length || !ths[0].offsetWidth) return; // tab chhupa hai, dikhne par dobara
+  let left = 0;
+  const css = ths.map((th, k) => { const rule = `#sheetTable .fx-${k}{left:${left}px}`; left += th.offsetWidth; return rule; });
+  let el = document.getElementById("fxStyle");
+  if (!el) { el = document.createElement("style"); el.id = "fxStyle"; document.head.appendChild(el); }
+  el.textContent = css.join("\n");
 }
 
 function downloadCSV() {
@@ -613,61 +626,74 @@ function deepMerge(a, b) {
 }
 
 /* =====================================================================
-   4. COMMENTS (UI ↔ Sheet notes)
+   4. INLINE EDIT (sheet ke cell mein seedha value) + SAVE
    ===================================================================== */
 
-function openComment(r, c) {
-  const d = state.data;
-  const row = d.rows.find((x) => x.gridRow === r);
-  if (!row) return;
-  state.comment = { r, c, area: row.area };
-  const w = d.weeks.find((w) => c >= w.col && c < w.col + 4);
-  const val = w ? row.weekly[d.weeks.indexOf(w)][METRICS[c - w.col].k] : null;
+function startEdit(td) {
+  if (state.saving || td.querySelector("input")) return;
+  const r = Number(td.dataset.r), c = Number(td.dataset.c);
+  const edit = state.edits.get(`${r}:${c}`);
+  const input = document.createElement("input");
+  input.className = "cell-in";
+  input.inputMode = "decimal";
+  input.value = edit ? edit.value : td.dataset.orig;
+  td.textContent = "";
+  td.appendChild(input);
+  input.focus();
+  input.select();
 
-  $("#cmTitle").textContent = row.team;
-  const shown = w ? (val === null ? "khaali" : fmtWeekVal(val)) : (row.raw[c] || "khaali");
-  $("#cmContext").textContent = cellContext(row, c) + (c === d.cols.area ? "" : ` · value: ${shown}`);
-  const existing = noteAt(r, c);
-  $("#cmExisting").textContent = existing || "Abhi koi comment nahi.";
-  $("#cmExisting").classList.toggle("muted", !existing);
-  $("#cmDelete").hidden = !existing;
-  $("#cmText").value = "";
-  $("#cmName").value = store.get("mis_name") || "";
-  $("#cmStatus").textContent = "";
-  $("#commentDialog").showModal();
-  setTimeout(() => $("#cmText").focus(), 50);
+  let done = false;
+  const finish = (keep) => {
+    if (done) return;
+    done = true;
+    if (keep) setEdit(r, c, input.value.trim(), td.dataset.orig);
+    renderAll();
+  };
+  input.addEventListener("blur", () => finish(true));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  });
 }
 
-async function saveComment(mode) {
-  const t = state.comment;
-  if (!t) return;
-  const text = $("#cmText").value.trim();
-  if (mode === "append" && !text) { $("#cmStatus").textContent = "Pehle comment likho."; return; }
-  if (mode === "replace" && !confirm("Is cell ka poora comment sheet se hata dein?")) return;
-  if (text.length > 1500) { $("#cmStatus").textContent = "Comment 1500 characters se chhota rakho."; return; }
-
-  const name = $("#cmName").value.trim();
-  store.set("mis_name", name);
-  $("#cmStatus").textContent = "Sheet mein save ho raha hai…";
-  $$("#commentDialog button").forEach((b) => (b.disabled = true));
-  try {
-    const res = await callScript({
-      action: "note", sheet: state.sheet, r: t.r, c: t.c,
-      ac: state.data.cols.area, area: t.area,
-      mode, text: mode === "replace" ? "" : text, name,
-    });
-    // turant UI update, phir poora refresh
-    if (res.note) state.data.notes.set(`${t.r}:${t.c}`, res.note); else state.data.notes.delete(`${t.r}:${t.c}`);
-    $("#commentDialog").close();
-    renderAll();
-    toast(mode === "replace" ? "Comment deleted. Sheet se bhi hat gaya." : "Comment saved. Sheet mein bhi dikh raha hai.");
-    state.signature = "";
-    load({ silent: true });
-  } catch (err) {
-    $("#cmStatus").textContent = err.message;
-  } finally {
-    $$("#commentDialog button").forEach((b) => (b.disabled = false));
+function setEdit(r, c, value, orig) {
+  const key = `${r}:${c}`;
+  if (value === orig) { state.edits.delete(key); return; }
+  if (value !== "" && !/^-?\d+(\.\d+)?%?$/.test(value)) {
+    toast("Sirf number likho (jaise 0, 5, -18).");
+    return;
   }
+  const row = state.data.rows.find((x) => x.gridRow === r);
+  state.edits.set(key, { r, c, area: row ? row.area : "", value });
+}
+
+function updateSaveBar() {
+  const n = state.edits.size;
+  $("#saveBar").hidden = n === 0;
+  $("#saveBtn").textContent = state.saving ? "Saving…" : `Save (${n})`;
+  $("#saveBtn").disabled = state.saving;
+}
+
+async function saveEdits() {
+  if (state.saving || !state.edits.size) return;
+  state.saving = true;
+  updateSaveBar();
+  let ok = 0, fail = 0;
+  for (const [key, e] of [...state.edits]) {
+    try {
+      await callScript({ action: "value", sheet: state.sheet, r: e.r, c: e.c, ac: state.data.cols.area, area: e.area, value: e.value });
+      state.edits.delete(key);
+      ok++;
+    } catch (err) {
+      e.error = err.message;
+      fail++;
+    }
+  }
+  state.saving = false;
+  renderAll();
+  toast(fail ? `${ok} save hue, ${fail} nahi hue (laal cell par mouse le jao)` : `${ok} value sheet mein save ho gayi.`);
+  state.signature = "";
+  load({ silent: true });
 }
 
 /* =====================================================================
@@ -676,6 +702,7 @@ async function saveComment(mode) {
 
 async function load({ silent = false } = {}) {
   if (state.loading) return;
+  if (silent && (state.saving || document.activeElement?.classList.contains("cell-in"))) return;
   state.loading = true;
   setSync("loading", silent ? "Checking sheet for changes…" : "Loading sheet… (5-10 sec)");
   try {
@@ -740,6 +767,7 @@ function switchView(v) {
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === v));
   $$(".view").forEach((s) => s.classList.toggle("active", s.id === `view-${v}`));
   if (v === "employee" && state.data) renderEmployee();
+  if (v === "sheet") freezeFixedCols();
   Object.values(state.charts).forEach((c) => c.resize());
 }
 
@@ -775,21 +803,19 @@ function bind() {
   $$(".tab").forEach((t) => t.addEventListener("click", () => switchView(t.dataset.view)));
   $("#downloadCsv").addEventListener("click", downloadCSV);
 
-  // comments: task table button, weekly cell, comments list
-  const openFrom = (e) => {
-    if (e.target.closest("a")) return; // link khulne do
-    const el = e.target.closest("[data-r][data-c]");
-    if (el) openComment(Number(el.dataset.r), Number(el.dataset.c));
+  // weekly cell par click = wahi value likho
+  const editFrom = (e) => {
+    const td = e.target.closest("td.editable");
+    if (td) startEdit(td);
   };
-  $("#empTable").addEventListener("click", openFrom);
-  $("#weekTable").addEventListener("click", openFrom);
-  $("#weekTable").addEventListener("keydown", (e) => { if (e.key === "Enter") openFrom(e); });
-  $("#empComments").addEventListener("click", openFrom);
-  $("#sheetTable").addEventListener("click", openFrom);
-  $("#cmSave").addEventListener("click", () => saveComment("append"));
-  $("#cmDelete").addEventListener("click", () => saveComment("replace"));
-  $("#cmCancel").addEventListener("click", () => $("#commentDialog").close());
-  $("#cmText").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveComment("append"); });
+  for (const id of ["#weekTable", "#sheetTable"]) {
+    $(id).addEventListener("click", editFrom);
+    $(id).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("td.editable")) editFrom(e); });
+  }
+  $("#saveBtn").addEventListener("mousedown", (e) => e.preventDefault()); // input blur pehle ho jaaye, click na khoye
+  $("#saveBtn").addEventListener("click", () => { document.activeElement?.blur?.(); saveEdits(); });
+  window.addEventListener("resize", freezeFixedCols);
+  window.addEventListener("beforeunload", (e) => { if (state.edits.size) { e.preventDefault(); e.returnValue = ""; } });
 
   document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ silent: true }); });
 }
