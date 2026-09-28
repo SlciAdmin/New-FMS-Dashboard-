@@ -3,7 +3,7 @@
    ===================================================================== */
 
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyf8SL-6ggmZJgvHwe4-6qypbBje_jQc54fZuJgUGFYYmctYXh3Pl1isoHrSCl6jG-f/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzloyr8DqsKrlvmbmQhwF-CjZ4N7UraQy37oH1qoXv0NCKkeIRCd8Buh8cotL-Z5cBj/exec",
   SCRIPT_KEY: "ndr-mis-8472-xyz",   // Code.gs wala SECRET_KEY (dono jagah same)
   DEFAULT_SHEET: "MIS-2025",
   REFRESH_SECONDS: 60,              // kitne second mein sheet dobara check ho
