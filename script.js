@@ -648,6 +648,9 @@ function startEdit(td) {
     done = true;
     if (keep) setEdit(r, c, input.value.trim(), td.dataset.orig);
     renderAll();
+    // value likhte hi seedha sheet mein save (Save button sirf fail hue cells dobara bhejne ke liye)
+    const edit = state.edits.get(`${r}:${c}`);
+    if (keep && edit && !edit.error) saveEdits();
   };
   input.addEventListener("blur", () => finish(true));
   input.addEventListener("keydown", (e) => {
