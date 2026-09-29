@@ -256,11 +256,7 @@ table.sheet .fx { position: sticky; left: 0; background: var(--surface); z-index
 table.sheet td.fx.ok { background: #e3f2ea; }
 table.sheet td.fx.bad { background: #f9e1df; }
 table.sheet thead th.fx { background: var(--paper); z-index: 4; }
-table.sheet .fx-last { border-right: 2px solid #b9c3d3; box-shadow: 4px 0 6px -4px rgba(28,37,54,.25); }
-/* chhoti screen: sirf Team + Result in area freeze, warna weeks ke liye jagah nahi bachti */
-@media (max-width: 900px) {
-  table.sheet .fx:not(.st-team):not(.st-area) { position: static; }
-}
+/* kitne columns freeze honge (aur aakhri frozen ki shadow) screen ki chaudai dekh ke JS tay karta hai */
 table.sheet thead th.fx { top: 0; vertical-align: bottom; }
 table.sheet tr.grp td { border-top: 2px solid #b9c3d3; }
 table.sheet td.ok { background: #e3f2ea; color: var(--done); }

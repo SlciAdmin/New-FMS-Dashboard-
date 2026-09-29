@@ -574,12 +574,22 @@ function renderSheetView() {
   freezeFixedCols();
 }
 
-// fixed columns ki chaudai naap ke har ek ka sticky "left" set karo
+// fixed columns ki chaudai naap ke har ek ka sticky "left" set karo.
+// Sirf utne columns freeze jitne table ki ~60% chaudai mein aa jaayein, taaki chhoti
+// screen (laptop/mobile) par bhi weeks ke Score/Commitment peeche na chhupein.
 function freezeFixedCols() {
   const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];
   if (!ths.length || !ths[0].offsetWidth) return; // tab chhupa hai, dikhne par dobara
-  let left = 0;
-  const css = ths.map((th, k) => { const rule = `#sheetTable .fx-${k}{left:${left}px}`; left += th.offsetWidth; return rule; });
+  const maxLeft = document.getElementById("sheetTable").parentElement.clientWidth * 0.6;
+  let left = 0, last = -1;
+  const css = ths.map((th, k) => {
+    const w = th.offsetWidth;
+    if (last !== k - 1 || left + w > maxLeft) return `#sheetTable .fx-${k}{left:auto}`; // sticky bina left = normal scroll (header ka top sticky bana rahe)
+    const rule = `#sheetTable .fx-${k}{left:${left}px}`;
+    left += w; last = k;
+    return rule;
+  });
+  if (last >= 0) css.push(`#sheetTable .fx-${last}{border-right:2px solid #b9c3d3;box-shadow:4px 0 6px -4px rgba(28,37,54,.25)}`);
   let el = document.getElementById("fxStyle");
   if (!el) { el = document.createElement("style"); el.id = "fxStyle"; document.head.appendChild(el); }
   el.textContent = css.join("\n");
