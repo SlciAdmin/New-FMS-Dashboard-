@@ -584,7 +584,10 @@ function freezeFixedCols() {
   let left = 0, last = -1;
   const css = ths.map((th, k) => {
     const w = th.offsetWidth;
-    if (last !== k - 1 || left + w > maxLeft) return `#sheetTable .fx-${k}{left:auto}`; // sticky bina left = normal scroll (header ka top sticky bana rahe)
+    // freeze nahi: cell normal scroll kare aur frozen columns ke PEECHE jaaye (upar nahi);
+    // header ka top-sticky bana rahe par frozen header se neeche layer mein
+    if (last !== k - 1 || left + w > maxLeft)
+      return `#sheetTable td.fx-${k}{position:relative;z-index:auto}\n#sheetTable th.fx-${k}{left:auto;z-index:2}`;
     const rule = `#sheetTable .fx-${k}{left:${left}px}`;
     left += w; last = k;
     return rule;
