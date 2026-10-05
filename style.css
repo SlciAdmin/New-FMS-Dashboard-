@@ -251,7 +251,7 @@ table.sheet td { cursor: pointer; }
 table.sheet td.num { text-align: right; }
 table.sheet td.st-area, table.sheet td.st-team { text-align: left; }
 table.sheet .st-team { min-width: 110px; max-width: 130px; font-weight: 700; white-space: normal; }
-/* Link tak freeze: left JS se (fx-<n>), baaki weeks scroll */
+/* Delay% tak freeze: left JS se (fx-<n>), baaki weeks scroll */
 table.sheet .fx { position: sticky; left: 0; background: var(--surface); z-index: 1; }
 table.sheet td.fx.ok { background: #e3f2ea; }
 table.sheet td.fx.bad { background: #f9e1df; }

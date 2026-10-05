@@ -549,7 +549,7 @@ function renderSheetView() {
     `${rows.length} rows${state.selectedEmp !== "__ALL__" ? ` · ${state.selectedEmp}` : ""}` +
     (idx.length ? ` · weeks: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}` : "");
 
-  // Link tak ke columns freeze: har fixed column ko fx-<n> class, left position baad mein naap ke
+  // Delay% tak ke columns freeze: har fixed column ko fx-<n> class, left position baad mein naap ke
   const fxCls = (k) => `fx fx-${k}${k === fixed.length - 1 ? " fx-last" : ""}`;
   const head1 = fixed.map(({ h, c }, k) =>
     `<th rowspan="3" class="${fxCls(k)} ${c === d.cols.team ? "st-team" : c === d.cols.area ? "st-area" : ""}">${esc(h)}</th>`).join("")
@@ -575,18 +575,20 @@ function renderSheetView() {
 }
 
 // fixed columns ki chaudai naap ke har ek ka sticky "left" set karo.
-// Sirf utne columns freeze jitne table ki ~60% chaudai mein aa jaayein, taaki chhoti
-// screen (laptop/mobile) par bhi weeks ke Score/Commitment peeche na chhupein.
+// Team se "Delay%" column tak freeze (Link aur weeks scroll). Sirf bahut chhoti screen
+// (mobile) par, jahan ye ~85% se zyada jagah le, utne hi freeze jitne fit hon.
 function freezeFixedCols() {
   const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];
   if (!ths.length || !ths[0].offsetWidth) return; // tab chhupa hai, dikhne par dobara
-  const maxLeft = document.getElementById("sheetTable").parentElement.clientWidth * 0.6;
+  const maxLeft = document.getElementById("sheetTable").parentElement.clientWidth * 0.85;
+  const delayK = ths.findIndex((th) => /delay/i.test(th.textContent));
+  const upto = delayK >= 0 ? delayK : ths.length - 1;
   let left = 0, last = -1;
   const css = ths.map((th, k) => {
     const w = th.offsetWidth;
     // freeze nahi: cell normal scroll kare aur frozen columns ke PEECHE jaaye (upar nahi);
     // header ka top-sticky bana rahe par frozen header se neeche layer mein
-    if (last !== k - 1 || left + w > maxLeft)
+    if (k > upto || last !== k - 1 || left + w > maxLeft)
       return `#sheetTable td.fx-${k}{position:relative;z-index:auto}\n#sheetTable th.fx-${k}{left:auto;z-index:2}`;
     const rule = `#sheetTable .fx-${k}{left:${left}px}`;
     left += w; last = k;
