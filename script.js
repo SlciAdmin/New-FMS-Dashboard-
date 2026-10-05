@@ -575,12 +575,10 @@ function renderSheetView() {
 }
 
 // fixed columns ki chaudai naap ke har ek ka sticky "left" set karo.
-// Team se "Delay%" column tak freeze (Link aur weeks scroll). Sirf bahut chhoti screen
-// (mobile) par, jahan ye ~85% se zyada jagah le, utne hi freeze jitne fit hon.
+// Team se "Delay%" column tak hamesha freeze; Link aur weeks scroll.
 function freezeFixedCols() {
   const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];
   if (!ths.length || !ths[0].offsetWidth) return; // tab chhupa hai, dikhne par dobara
-  const maxLeft = document.getElementById("sheetTable").parentElement.clientWidth * 0.85;
   const delayK = ths.findIndex((th) => /delay/i.test(th.textContent));
   const upto = delayK >= 0 ? delayK : ths.length - 1;
   let left = 0, last = -1;
@@ -588,7 +586,7 @@ function freezeFixedCols() {
     const w = th.offsetWidth;
     // freeze nahi: cell normal scroll kare aur frozen columns ke PEECHE jaaye (upar nahi);
     // header ka top-sticky bana rahe par frozen header se neeche layer mein
-    if (k > upto || last !== k - 1 || left + w > maxLeft)
+    if (k > upto)
       return `#sheetTable td.fx-${k}{position:relative;z-index:auto}\n#sheetTable th.fx-${k}{left:auto;z-index:2}`;
     const rule = `#sheetTable .fx-${k}{left:${left}px}`;
     left += w; last = k;
