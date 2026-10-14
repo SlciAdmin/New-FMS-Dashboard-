@@ -18,6 +18,7 @@ function doGet(e) {
   if (p.key !== SECRET_KEY) return send({ error: "Unauthorized: key galat hai" }, p.callback);
   try {
     if (p.action === "note") return send(saveNote(p), p.callback);
+    if (p.action === "values") return send(saveValues(p), p.callback);
     if (p.action === "value") return send(saveValue(p), p.callback);
     return send(getData(p), p.callback);
   } catch (err) {
@@ -142,10 +143,57 @@ function saveValue(p) {
     if (t.cell.getFormula()) {
       throw new Error("Is cell mein formula hai (" + t.cell.getFormula() + "). Iski value sheet khud nikaalti hai, yahan se nahi badal sakte.");
     }
-    if (raw === "") t.cell.clearContent();
-    else if (/%$/.test(raw)) t.cell.setValue(parseFloat(raw) / 100).setNumberFormat("0%");
-    else t.cell.setValue(parseFloat(raw));
-    return { ok: true, r: t.r, c: t.c, value: t.cell.getDisplayValue() };
+    writeNumber(t.cell, raw);
+    return { ok: true, r: t.r, c: t.c, value: raw };
+  });
+}
+
+// value likho, wapas padho nahi (padhne par Google pehle poori sheet recalculate karta hai = 1-3 sec extra)
+function writeNumber(cell, raw) {
+  if (raw === "") cell.clearContent();
+  else if (/%$/.test(raw)) cell.setValue(parseFloat(raw) / 100).setNumberFormat("0%");
+  else cell.setValue(parseFloat(raw));
+}
+
+/* ---------------- WRITE MANY VALUES (ek request, ek lock) ---------------- */
+// params: sheet, areaCol, items = JSON [{ row, col, area, value }, ...] (0-based)
+// har item ka alag result { ok, value } ya { error }: ek galat cell baaki cells ko nahi rokta
+function saveValues(p) {
+  const sh = openSheet(p.sheet);
+  const items = JSON.parse(p.items || "[]");
+  if (!items.length) return { ok: true, results: [] };
+  const ac = parseInt(p.areaCol, 10);
+
+  return withLock(function () {
+    // pehle saari reads ek saath, phir saari writes (beech mein read karne se Google har baar flush karta hai)
+    const rows = items.map(function (it) { return parseInt(it.row, 10); });
+    const cols = items.map(function (it) { return parseInt(it.col, 10); });
+    if (rows.concat(cols).some(function (n) { return !(n >= 0); })) throw new Error("Galat cell");
+    const r0 = Math.min.apply(null, rows), r1 = Math.max.apply(null, rows);
+    const c0 = Math.min.apply(null, cols), c1 = Math.max.apply(null, cols);
+    const formulas = sh.getRange(r0 + 1, c0 + 1, r1 - r0 + 1, c1 - c0 + 1).getFormulas();
+    const areas = ac >= 0 ? sh.getRange(r0 + 1, ac + 1, r1 - r0 + 1, 1).getDisplayValues() : null;
+
+    const results = items.map(function (it, i) {
+      const r = rows[i], c = cols[i];
+      const raw = String(it.value === undefined || it.value === null ? "" : it.value).trim();
+      if (raw !== "" && !/^-?\d+(\.\d+)?%?$/.test(raw)) return { error: "Value sirf number honi chahiye (jaise 0, 5, -18)." };
+      if (areas && it.area) {
+        const now = String(areas[r - r0][0]).trim();
+        if (now !== String(it.area).trim()) {
+          return { error: "Sheet mein rows badal gayi hain (yahan ab \"" + now + "\" hai). Refresh karke dobara likho." };
+        }
+      }
+      const f = formulas[r - r0][c - c0];
+      if (f) return { error: "Is cell mein formula hai (" + f + "). Iski value sheet khud nikaalti hai, yahan se nahi badal sakte." };
+      try {
+        writeNumber(sh.getRange(r + 1, c + 1), raw);
+        return { ok: true, value: raw };
+      } catch (err) {
+        return { error: friendlyError(err) };
+      }
+    });
+    return { ok: true, results: results };
   });
 }
 

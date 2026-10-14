@@ -3,7 +3,7 @@
    ===================================================================== */
 
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzloyr8DqsKrlvmbmQhwF-CjZ4N7UraQy37oH1qoXv0NCKkeIRCd8Buh8cotL-Z5cBj/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzSvLicapCoiP7JQAXkUF4ryq4TjHfORfsrq02QtDA2vRiq3pW_UowXtplxtv1_cVpt/exec",
   SCRIPT_KEY: "ndr-mis-8472-xyz",   // Code.gs wala SECRET_KEY (dono jagah same)
   DEFAULT_SHEET: "MIS-2025",
   REFRESH_SECONDS: 60,              // kitne second mein sheet dobara check ho
@@ -29,6 +29,10 @@ const state = {
   saving: false,
   saved: new Map(),       // "r:c" -> { r, c, value, at } (save ho gaye, sheet se confirm hone tak)
   reloadAfter: false,
+  saveAgain: false,       // save chalte waqt aur values aayi: khatam hote hi dobara bhejo
+  saveTimer: null,
+  reloadTimer: null,
+  noBatch: false,         // Code.gs purana deploy hai (batch "values" action nahi hai)
 };
 
 const $ = (s) => document.querySelector(s);
@@ -522,8 +526,8 @@ function weekCell(r, c, v, extra = "") {
   const note = noteAt(r.gridRow, c);
   const shown = edit ? edit.value : origValue(v);
   const n = edit ? num(edit.value) : v;
-  const cls = [n === null ? "" : n === 0 ? "ok" : "bad", note ? "has-note" : "", edit ? "edited" : "", edit && edit.error ? "err" : "", "editable", extra].join(" ");
-  const title = edit && edit.error ? edit.error : note || "Click karke value likho";
+  const cls = [n === null ? "" : n === 0 ? "ok" : "bad", note ? "has-note" : "", edit ? "edited" : "", edit && edit.sending ? "sending" : "", edit && edit.error ? "err" : "", "editable", extra].join(" ");
+  const title = edit && edit.error ? edit.error : edit ? "Sheet mein save ho raha hai…" : note || "Click karke value likho";
   return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" data-orig="${esc(origValue(v))}" tabindex="0" title="${esc(title)}">${esc(shown)}</td>`;
 }
 
@@ -645,7 +649,7 @@ function deepMerge(a, b) {
    ===================================================================== */
 
 function startEdit(td) {
-  if (state.saving || td.querySelector("input")) return;
+  if (td.querySelector("input")) return; // save peeche chalta rahe, aap agla cell bharte raho
   const r = Number(td.dataset.r), c = Number(td.dataset.c);
   const edit = state.edits.get(`${r}:${c}`);
   const input = document.createElement("input");
@@ -663,9 +667,9 @@ function startEdit(td) {
     done = true;
     if (keep) setEdit(r, c, input.value.trim(), td.dataset.orig);
     renderAll();
-    // value likhte hi seedha sheet mein save (Save button sirf fail hue cells dobara bhejne ke liye)
+    // value likhte hi sheet mein save (thodi der jama karke ek request mein; Save button sirf fail hue cells ke liye)
     const edit = state.edits.get(`${r}:${c}`);
-    if (keep && edit && !edit.error) saveEdits();
+    if (keep && edit && !edit.error) queueSave();
   };
   input.addEventListener("blur", () => finish(true));
   input.addEventListener("keydown", (e) => {
@@ -676,7 +680,9 @@ function startEdit(td) {
 
 function setEdit(r, c, value, orig) {
   const key = `${r}:${c}`;
-  if (value === orig) { state.edits.delete(key); return; }
+  const prev = state.edits.get(key);
+  // purani value wapas likhi aur koi save raaste mein nahi = kuch bhejna nahi
+  if (value === orig && !(prev && prev.sending)) { state.edits.delete(key); return; }
   if (value !== "" && !/^-?\d+(\.\d+)?%?$/.test(value)) {
     toast("Sirf number likho (jaise 0, 5, -18).");
     return;
@@ -686,36 +692,90 @@ function setEdit(r, c, value, orig) {
 }
 
 function updateSaveBar() {
-  const n = state.edits.size;
-  $("#saveBar").hidden = n === 0;
-  $("#saveBtn").textContent = state.saving ? "Saving…" : `Save (${n})`;
+  const failed = [...state.edits.values()].filter((e) => e.error).length;
+  $("#saveBar").hidden = failed === 0;
+  $("#saveBtn").textContent = state.saving ? "Saving…" : `Retry (${failed})`;
   $("#saveBtn").disabled = state.saving;
 }
 
-async function saveEdits() {
-  if (state.saving || !state.edits.size) return;
-  state.saving = true;
-  updateSaveBar();
-  let ok = 0, fail = 0, lastErr = "";
-  for (const [key, e] of [...state.edits]) {
+// jaldi-jaldi bhari values ko 400ms jama karke ek hi request mein bhejo
+function queueSave() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(saveEdits, 400);
+}
+
+// formula wale cells (Delay% waghera) update karne ke liye: aakhri save ke 3 sec baad chupchaap ek reload
+function queueReload() {
+  clearTimeout(state.reloadTimer);
+  state.reloadTimer = setTimeout(() => {
+    state.signature = "";
+    if (state.loading || state.saving) state.reloadAfter = true;
+    else load({ silent: true });
+  }, 3000);
+}
+
+// table dobara banao, lekin agar user kisi cell mein likh raha hai to uska input mat todo (finish khud render karega)
+function renderIfIdle() {
+  if (document.activeElement?.classList.contains("cell-in")) return;
+  renderAll();
+}
+
+async function sendBatch(batch) {
+  const items = batch.map((e) => ({ row: e.r, col: e.c, area: e.area, value: e.value }));
+  if (!state.noBatch) {
+    const res = await callScript({ action: "values", sheet: state.sheet, areaCol: state.data.cols.area, items: JSON.stringify(items) });
+    if (Array.isArray(res.results)) return res.results;
+    state.noBatch = true; // Code.gs abhi purana deploy hai: ek-ek cell wala tareeka
+  }
+  const out = [];
+  for (const it of items) {
     try {
-      const res = await callScript({ action: "value", sheet: state.sheet, row: e.r, col: e.c, areaCol: state.data.cols.area, area: e.area, value: e.value });
-      state.edits.delete(key);
-      state.saved.set(key, { r: e.r, c: e.c, value: res.value ?? e.value, at: Date.now() });
-      ok++;
+      const res = await callScript({ action: "value", sheet: state.sheet, row: it.row, col: it.col, areaCol: state.data.cols.area, area: it.area, value: it.value });
+      out.push({ ok: true, value: res.value });
     } catch (err) {
-      e.error = err.message;
-      lastErr = err.message;
-      fail++;
+      out.push({ error: err.message });
     }
   }
+  return out;
+}
+
+// retry = true: Save/Retry button se, fail hue cells bhi dobara bhejo
+async function saveEdits(retry = false) {
+  if (state.saving) { state.saveAgain = true; return; }
+  const batch = [...state.edits.entries()].filter(([, e]) => !e.sending && (retry || !e.error));
+  if (!batch.length) return;
+  state.saving = true;
+  for (const [, e] of batch) { e.sending = true; delete e.error; }
+  updateSaveBar();
+
+  let results;
+  try {
+    results = await sendBatch(batch.map(([, e]) => e));
+  } catch (err) {
+    results = batch.map(() => ({ error: err.message }));
+  }
+
+  let fail = 0, lastErr = "";
+  batch.forEach(([key, e], i) => {
+    const res = results[i] || { error: "Sheet se jawab nahi aaya" };
+    e.sending = false;
+    if (res.error) { e.error = res.error; lastErr = res.error; fail++; return; }
+    state.saved.set(key, { r: e.r, c: e.c, value: res.value ?? e.value, at: Date.now() });
+    // beech mein user ne isi cell mein nayi value likh di ho to wo edit rehne do (wo agle batch mein jaayegi)
+    if (state.edits.get(key) === e) state.edits.delete(key);
+  });
+
   state.saving = false;
   applySaved(state.data);
-  renderAll();
-  toast(fail ? `${ok} save hue, ${fail} nahi hue: ${lastErr.split("\n")[0]}` : `${ok} value sheet mein save ho gayi.`);
-  state.signature = "";
-  if (state.loading) state.reloadAfter = true; // chal raha load purana data laayega, uske baad dobara
-  else load({ silent: true });
+  renderIfIdle();
+  updateSaveBar();
+  if (fail) toast(`${fail} value save nahi hui: ${lastErr.split("\n")[0]}`);
+  else setSync("live", `Saved · ${new Date().toLocaleTimeString("en-IN")}`);
+
+  // save ke dauraan nayi values aa gayi ho to unhe turant bhejo, warna reload schedule karo
+  const more = [...state.edits.values()].some((e) => !e.sending && !e.error);
+  if (state.saveAgain || more) { state.saveAgain = false; saveEdits(); }
+  else queueReload();
 }
 
 // save hui values dashboard par turant dikhao; jab tak sheet se aaya data unhe confirm na kare
@@ -852,7 +912,7 @@ function bind() {
     $(id).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("td.editable")) editFrom(e); });
   }
   $("#saveBtn").addEventListener("mousedown", (e) => e.preventDefault()); // input blur pehle ho jaaye, click na khoye
-  $("#saveBtn").addEventListener("click", () => { document.activeElement?.blur?.(); saveEdits(); });
+  $("#saveBtn").addEventListener("click", () => { document.activeElement?.blur?.(); saveEdits(true); });
   window.addEventListener("resize", freezeFixedCols);
   window.addEventListener("beforeunload", (e) => { if (state.edits.size) { e.preventDefault(); e.returnValue = ""; } });
 

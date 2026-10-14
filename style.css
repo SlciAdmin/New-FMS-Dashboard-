@@ -192,6 +192,8 @@ table.week td.has-note::after {
 
 /* inline edit + save */
 table.week td.edited { background: #fff5d6; color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 2px var(--warn); }
+table.week td.edited.sending { animation: saving 1s ease-in-out infinite alternate; }
+@keyframes saving { to { background: #fffbe9; } }
 table.week td.err { box-shadow: inset 0 0 0 2px var(--bad); }
 table.week td:has(> .cell-in) { padding: 0; }
 .cell-in {
