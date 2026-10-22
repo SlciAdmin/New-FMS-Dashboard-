@@ -196,6 +196,7 @@ table.week td.edited.sending { animation: saving 1s ease-in-out infinite alterna
 @keyframes saving { to { background: #fffbe9; } }
 table.week td.err { box-shadow: inset 0 0 0 2px var(--bad); }
 table.week td:has(> .cell-in) { padding: 0; }
+table.week td.editable:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cell-in {
   width: 100%; min-width: 64px; height: 100%; border: 2px solid var(--accent); padding: 5px 6px;
   font: inherit; text-align: center; background: #fff; color: var(--ink); outline: none;

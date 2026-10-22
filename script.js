@@ -264,11 +264,13 @@ const toneBar = (c) => (c === null ? "" : c >= 0.9 ? "" : c >= 0.7 ? "mid" : "lo
 
 function renderAll() {
   if (!state.data) return;
+  const at = cellPos(document.activeElement); // arrow keys se chuna hua cell render ke baad bhi chuna rahe
   renderRoster();
   renderOverview();
   if (state.selectedEmp !== "__ALL__") renderEmployee();
   renderSheetView();
   updateSaveBar();
+  if (at) focusCell(at);
 }
 
 function kpiHTML(items) {
@@ -648,33 +650,121 @@ function deepMerge(a, b) {
    4. INLINE EDIT (sheet ke cell mein seedha value) + SAVE
    ===================================================================== */
 
-function startEdit(td) {
+/* ---- Excel jaisa keyboard: ↑ ↓ ← → se cell badlo, number type karo to seedha likhna shuru ---- */
+// cell ki pehchaan (table + sheet row + col): render ke baad naya <td> isi se dhoondhte hain
+function cellPos(el) {
+  const td = el?.closest?.("td.editable");
+  const table = td?.closest("table");
+  return td && table?.id ? { table: table.id, r: td.dataset.r, c: td.dataset.c } : null;
+}
+
+// dir = up | down | left | right: us taraf ka agla likhne wala cell (koi nahi to null)
+function neighborCell(td, dir) {
+  if (dir === "left" || dir === "right") {
+    let x = td;
+    do x = dir === "left" ? x.previousElementSibling : x.nextElementSibling;
+    while (x && !x.matches("td.editable"));
+    return x;
+  }
+  let tr = td.parentElement;
+  while ((tr = dir === "up" ? tr.previousElementSibling : tr.nextElementSibling)) {
+    const x = tr.querySelector(`td.editable[data-c="${td.dataset.c}"]`);
+    if (x) return x;
+  }
+  return null;
+}
+
+function focusCell(pos) {
+  const td = document.querySelector(`#${pos.table} td.editable[data-r="${pos.r}"][data-c="${pos.c}"]`);
+  if (!td) return null;
+  td.focus({ preventScroll: true });
+  revealCell(td);
+  return td;
+}
+
+// cell ko table ke dikhne wale hisse mein lao: frozen (sticky) columns aur header ke peeche na chhupe
+function revealCell(td) {
+  const wrap = td.closest(".table-wrap");
+  if (!wrap) return td.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const box = wrap.getBoundingClientRect(), cell = td.getBoundingClientRect();
+  let left = box.left, top = box.top;
+  for (const x of td.parentElement.cells) {
+    if (x !== td && getComputedStyle(x).position === "sticky") left = Math.max(left, x.getBoundingClientRect().right);
+  }
+  const head = td.closest("table").tHead;
+  if (head) top = Math.max(top, head.getBoundingClientRect().bottom);
+  const right = box.left + wrap.clientWidth, bottom = box.top + wrap.clientHeight;
+  if (cell.left < left) wrap.scrollLeft -= left - cell.left;
+  else if (cell.right > right) wrap.scrollLeft += cell.right - right;
+  if (cell.top < top) wrap.scrollTop -= top - cell.top;
+  else if (cell.bottom > bottom) wrap.scrollTop += cell.bottom - bottom;
+  const page = td.getBoundingClientRect(); // table khud screen se bahar ho to page bhi scroll karo
+  if (page.top < 0 || page.bottom > innerHeight) td.scrollIntoView({ block: "nearest" });
+}
+
+const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+
+// chune hue (focus wale) cell par key: arrows = cell badlo, Enter/F2 = edit, number = naya likho, Delete = khaali karo
+function cellKeydown(e) {
+  const td = e.target;
+  if (!td.matches?.("td.editable") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (ARROWS[e.key]) {
+    e.preventDefault();
+    const next = neighborCell(td, ARROWS[e.key]);
+    if (next) focusCell(cellPos(next));
+  } else if (e.key === "Tab") {
+    const next = neighborCell(td, e.shiftKey ? "left" : "right");
+    if (next) { e.preventDefault(); focusCell(cellPos(next)); }
+  } else if (e.key === "Enter" || e.key === "F2") {
+    e.preventDefault();
+    startEdit(td);
+  } else if (/^[\d.%-]$/.test(e.key)) {
+    e.preventDefault();
+    startEdit(td, { text: e.key });
+  } else if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    startEdit(td, { text: "" });
+  }
+}
+
+// opts.text: Excel jaisa "type karke likhna" (purani value hata kar ye text, ← → se cell badalta hai);
+// bina text (click / Enter / F2) = purani value edit karo (← → se cursor chalta hai)
+function startEdit(td, opts = {}) {
   if (td.querySelector("input")) return; // save peeche chalta rahe, aap agla cell bharte raho
   const r = Number(td.dataset.r), c = Number(td.dataset.c);
+  const pos = cellPos(td);
+  const typing = opts.text !== undefined;
   const edit = state.edits.get(`${r}:${c}`);
   const input = document.createElement("input");
   input.className = "cell-in";
   input.inputMode = "decimal";
-  input.value = edit ? edit.value : td.dataset.orig;
+  input.value = typing ? opts.text : edit ? edit.value : td.dataset.orig;
   td.textContent = "";
   td.appendChild(input);
   input.focus();
-  input.select();
+  if (typing) input.setSelectionRange(input.value.length, input.value.length);
+  else input.select();
 
   let done = false;
-  const finish = (keep) => {
+  // move = up|down|left|right: save karke us taraf ka cell chuno; "stay" = isi cell par raho; null = mouse se bahar gaye
+  const finish = (keep, move = null) => {
     if (done) return;
     done = true;
+    const next = move && move !== "stay" ? cellPos(neighborCell(td, move)) : null;
     if (keep) setEdit(r, c, input.value.trim(), td.dataset.orig);
     renderAll();
+    if (move) focusCell(next || pos);
     // value likhte hi sheet mein save (thodi der jama karke ek request mein; Save button sirf fail hue cells ke liye)
     const edit = state.edits.get(`${r}:${c}`);
     if (keep && edit && !edit.error) queueSave();
   };
   input.addEventListener("blur", () => finish(true));
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); finish(true); }
-    if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    const dir = ARROWS[e.key];
+    if (e.key === "Enter") { e.preventDefault(); finish(true, e.shiftKey ? "up" : "down"); }
+    else if (e.key === "Tab") { e.preventDefault(); finish(true, e.shiftKey ? "left" : "right"); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false, "stay"); }
+    else if (dir === "up" || dir === "down" || (dir && typing)) { e.preventDefault(); finish(true, dir); }
   });
 }
 
@@ -909,7 +999,7 @@ function bind() {
   };
   for (const id of ["#weekTable", "#sheetTable"]) {
     $(id).addEventListener("click", editFrom);
-    $(id).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("td.editable")) editFrom(e); });
+    $(id).addEventListener("keydown", cellKeydown);
   }
   $("#saveBtn").addEventListener("mousedown", (e) => e.preventDefault()); // input blur pehle ho jaaye, click na khoye
   $("#saveBtn").addEventListener("click", () => { document.activeElement?.blur?.(); saveEdits(true); });
