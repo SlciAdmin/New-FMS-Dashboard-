@@ -320,7 +320,7 @@ function renderOverview() {
     { v: pct(t.delayRate), l: "Delayed (of done)", tone: t.delayRate > 0.2 ? "bad" : t.delayRate > 0.05 ? "warn" : "good" },
   ]);
 
-  renderPies("ov", d.rows.filter((r) => r.team), t);
+  renderPies("ov", d.rows.filter((r) => r.team));
 
   const worst = [...d.employees].filter((e) => e.notDoneGap !== null && e.planned > 0)
     .sort((a, b) => b.notDoneGap - a.notDoneGap).slice(0, 8);
@@ -361,7 +361,7 @@ function renderEmployee() {
     { v: pct(e.delayRate), l: "Delay rate", tone: e.delayRate > 0.2 ? "bad" : e.delayRate > 0.05 ? "warn" : "good" },
   ]);
 
-  renderPies("emp", e.rows, e);
+  renderPies("emp", e.rows);
 
   // Task areas: bilkul sheet jaise columns (Team ke bina)
   const d = state.data, ac = d.cols.area;
@@ -432,7 +432,7 @@ function renderWeekly(e) {
 
 const fmtWeekVal = (v) => (Math.abs(v) < 1 && v !== 0 ? pct(v) : fmt(v));
 
-/* ---- pie chart: Actual not done vs Commitment not done ---- */
+/* ---- pie charts: Not done aur Delay, Actual vs Commitment ---- */
 // weekly cell ko "kitna % not done" (0-100) mein: "-20" aur "-20%" dono = 20; plus wali value = 0
 function notDoneOf(v) {
   if (v === null) return null;
@@ -450,70 +450,146 @@ function avgNotDone(rows, k) {
   return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
 }
 
-// ek hi pie: Actual not done (sheet ka "Not Done" = planned mein se kitna nahi hua) vs Commitment not done
-// p = "ov" (overview) ya "emp" (employee report); t = summarize() wala total
-function renderPies(p, rows, t) {
+// do pie, sheet jaisa hisaab, dono mein Actual vs Commitment milake 100%:
+//   Not done = pending / planned   (jaise UAN: 3 / 41 = 7%)
+//   Delay    = delayed / done      (jaise UAN: 26 / 38 = 68%)
+const PIES = [
+  { k: "NotDone", title: "Not done", commit: "commitNotDone" },
+  { k: "Delay", title: "Delay", commit: "commitDelay" },
+];
+
+// p = "ov" (overview) ya "emp" (employee report); rows = us scope ki task area rows
+function renderPies(p, rows) {
   const box = $(`#${p}Pies`);
   if (!box.children.length) {
-    box.innerHTML = `
+    box.innerHTML = PIES.map(({ k, title }) => `
       <div class="pie">
-        <div class="pie-chart"><canvas id="${p}Pie"></canvas><div class="pie-center" id="${p}Center"></div></div>
-        <ul class="pie-legend" id="${p}Legend"></ul>
-      </div>
-      <p class="pie-verdict" id="${p}Verdict"></p>`;
+        <h3>${title}</h3>
+        <p class="pie-calc" id="${p}${k}Calc"></p>
+        <div class="pie-chart"><canvas id="${p}Pie${k}"></canvas><div class="pie-center" id="${p}${k}Center"></div></div>
+        <ul class="pie-legend" id="${p}${k}Legend"></ul>
+        <p class="pie-verdict" id="${p}${k}Verdict"></p>
+      </div>`).join("") + `
+      <div class="compare">
+        <h3>Comparison: Actual vs Commitment</h3>
+        <div class="chart-wrap"><canvas id="${p}Compare"></canvas></div>
+      </div>`;
+    $(`#${p}Area`).addEventListener("change", () => (p === "ov" ? renderOverview() : renderEmployee()));
   }
+
+  // task area chuno: sab ya ek (jaise UAN N M)
+  const sel = $(`#${p}Area`), want = sel.value;
+  const areas = [...new Set(rows.filter((r) => r.planned > 0).map((r) => r.area))];
+  sel.innerHTML = `<option value="">All task areas</option>` + areas.map((a) => `<option>${esc(a)}</option>`).join("");
+  sel.value = areas.includes(want) ? want : "";
+  const use = sel.value ? rows.filter((r) => r.area === sel.value) : rows;
 
   const weeks = state.data.weeks, idx = visibleWeeks();
   $(`#${p}PieInfo`).textContent = idx.length
-    ? `Commitment: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""} (upar wala week range)`
-    : "Is week range mein koi week nahi. Upar se 'All weeks' chuno.";
+    ? `Commitment: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}`
+    : "Is week range mein koi week nahi";
 
-  const actual = t.notDoneGap === null ? null : t.notDoneGap * 100;
-  const com = avgNotDone(rows, "commitNotDone");
-  const slices = [
-    { label: "Actual", v: actual, color: "#b4372f", sub: `${fmt(Math.max(0, (t.planned || 0) - (t.doneByMe || t.actualDone || 0)))} / ${fmt(t.planned)} tasks` },
-    { label: "Commitment", v: com.notDone, color: "#c27c12", sub: com.n ? `${fmt(com.n)} entries ka average` : "koi entry nahi" },
-  ];
-  const has = slices.some((s) => s.v > 0);
-  // dono milake 100: total not done mein se kitna hissa actual ka, kitna commitment ka
-  const total = slices.reduce((a, s) => a + (s.v || 0), 0);
-  for (const s of slices) s.share = has ? ((s.v || 0) / total) * 100 : null;
-  drawChart(`${p}Pie`, {
-    type: "doughnut",
+  const t = summarize(use);
+  const done = t.doneByMe || t.actualDone || 0, pending = Math.max(0, (t.planned || 0) - done);
+  const show = (v) => (v === null ? "–" : pct(v / 100, 1));
+  const actual = {
+    NotDone: t.notDoneGap === null ? null : t.notDoneGap * 100,
+    Delay: t.delayRate === null ? null : t.delayRate * 100,
+  };
+  const calc = {
+    NotDone: t.planned ? `Planned ${fmt(t.planned)} · Done ${fmt(done)} · Pending ${fmt(pending)} → ${fmt(pending)} ÷ ${fmt(t.planned)} = <b>${show(actual.NotDone)}</b>` : "Koi planned task nahi",
+    Delay: done ? `Done ${fmt(done)} · Delayed ${fmt(t.delayCount)} → ${fmt(t.delayCount)} ÷ ${fmt(done)} = <b>${show(actual.Delay)}</b>` : "Koi done task nahi",
+  };
+
+  const bars = { actual: [], commit: [] };
+  for (const { k, commit } of PIES) {
+    const com = avgNotDone(use, commit);
+    bars.actual.push(actual[k]);
+    bars.commit.push(com.notDone);
+    const slices = [
+      { label: "Actual", v: actual[k], color: "#b4372f", sub: k === "NotDone" ? `${fmt(pending)} / ${fmt(t.planned)} tasks` : `${fmt(t.delayCount)} / ${fmt(done)} tasks` },
+      { label: "Commitment", v: com.notDone, color: "#c27c12", sub: com.n ? `${fmt(com.n)} entries ka average` : "koi entry nahi" },
+    ];
+    const total = slices.reduce((a, s) => a + (s.v || 0), 0);
+    const has = slices.every((s) => s.v !== null) && total > 0; // dono value chahiye, warna 100/0 galat dikhega
+    for (const s of slices) s.share = has ? ((s.v || 0) / total) * 100 : null;
+
+    drawChart(`${p}Pie${k}`, {
+      type: "doughnut",
+      data: {
+        labels: has ? slices.map((s) => s.label) : ["No data"],
+        datasets: [{
+          data: has ? slices.map((s) => s.share) : [1],
+          backgroundColor: has ? slices.map((s) => s.color) : ["#e3e7ee"],
+          borderColor: "#fff", borderWidth: 2,
+        }],
+      },
+      options: {
+        cutout: "62%",
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: has, callbacks: { label: (ctx) => `${ctx.label}: ${show(ctx.raw)} (value ${show(slices[ctx.dataIndex].v)})` } },
+        },
+      },
+    });
+
+    $(`#${p}${k}Calc`).innerHTML = calc[k];
+    $(`#${p}${k}Center`).innerHTML = has
+      ? `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="warn small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`
+      : `<b class="bad">${show(actual[k])}</b><span>Actual</span><span>Commitment: ${com.n ? "–" : "koi entry nahi"}</span>`;
+    $(`#${p}${k}Legend`).innerHTML = slices.map((s) =>
+      `<li><i style="background:${s.color}"></i><span>${s.label}<small>value ${show(s.v)} · ${esc(s.sub)}</small></span><b>${show(s.share)}</b></li>`).join("")
+      + (has ? `<li class="pie-sum"><span>Total (dono milake)</span><b>100%</b></li>` : "");
+
+    const v = $(`#${p}${k}Verdict`), a = actual[k], c = com.notDone;
+    if (a === null || c === null) {
+      v.className = "pie-verdict";
+      v.textContent = a === null ? "Actual nikalne ke liye data nahi hai." : "Is week range mein Commitment ke cells khaali hain.";
+    } else {
+      const gap = a - c; // plus = commitment se zyada kharab
+      v.className = `pie-verdict ${gap > 0.5 ? "bad" : "good"}`;
+      v.textContent = gap > 0.5 ? `Actual commitment se ${pct(gap / 100, 1)} zyada hai.`
+        : gap < -0.5 ? `Actual commitment se ${pct(-gap / 100, 1)} kam hai. Commitment se behtar.`
+        : "Actual aur commitment barabar hain.";
+    }
+  }
+
+  // bar chart: Not done vs Commitment not done, Delay vs Commitment delay (bar ke upar % likha)
+  drawChart(`${p}Compare`, {
+    type: "bar",
     data: {
-      labels: has ? slices.map((s) => s.label) : ["No data"],
-      datasets: [{
-        data: has ? slices.map((s) => s.v || 0) : [1],
-        backgroundColor: has ? slices.map((s) => s.color) : ["#e3e7ee"],
-        borderColor: "#fff", borderWidth: 2,
-      }],
+      labels: ["Not done vs Commitment not done", "Delay vs Commitment delay"],
+      datasets: [
+        { label: "Actual", data: bars.actual, backgroundColor: "#b4372f", borderRadius: 4, maxBarThickness: 80 },
+        { label: "Commitment", data: bars.commit, backgroundColor: "#c27c12", borderRadius: 4, maxBarThickness: 80 },
+      ],
     },
     options: {
-      cutout: "62%",
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: has, callbacks: { label: (ctx) => `${ctx.label}: ${pct(slices[ctx.dataIndex].share / 100, 1)} (value ${pct(ctx.raw / 100, 1)})` } },
-      },
+      layout: { padding: { top: 24 } },
+      scales: { y: { ticks: { callback: (v) => v + "%" } } },
+      plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${show(ctx.raw)}` } } },
     },
+    plugins: [barLabels(show)],
   });
+}
 
-  const show = (v) => (v === null ? "–" : pct(v / 100, 1));
-  $(`#${p}Center`).innerHTML = `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="warn small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`;
-  $(`#${p}Legend`).innerHTML = slices.map((s) =>
-    `<li><i style="background:${s.color}"></i><span>${s.label}<small>value ${show(s.v)} · ${esc(s.sub)}</small></span><b>${show(s.share)}</b></li>`).join("")
-    + (has ? `<li class="pie-sum"><span>Total (dono milake)</span><b>100%</b></li>` : "");
-
-  const v = $(`#${p}Verdict`);
-  if (actual === null || com.notDone === null) {
-    v.className = "pie-verdict";
-    v.textContent = actual === null ? "Planned tasks nahi hain, actual not done nahi nikal sakte." : "Is week range mein Commitment · Not done ke cells khaali hain.";
-  } else {
-    const gap = actual - com.notDone; // plus = commitment se zyada kaam baaki
-    v.className = `pie-verdict ${gap > 0.5 ? "bad" : "good"}`;
-    v.textContent = gap > 0.5 ? `Actual commitment se ${pct(gap / 100, 1)} zyada hai.`
-      : gap < -0.5 ? `Actual commitment se ${pct(-gap / 100, 1)} kam hai. Commitment se behtar.`
-      : "Actual aur commitment barabar hain.";
-  }
+// har bar ke upar uski value likho (khaali value par "koi entry nahi")
+function barLabels(show) {
+  return {
+    id: "barLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.font = "700 13px Figtree, sans-serif";
+      ctx.textAlign = "center";
+      chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, j) => {
+        const v = ds.data[j];
+        ctx.fillStyle = v === null ? "#667085" : "#1c2536";
+        ctx.fillText(v === null ? "koi entry nahi" : show(v), bar.x, (v === null ? chart.scales.y.bottom : bar.y) - 6);
+      }));
+      ctx.restore();
+    },
+  };
 }
 
 function renderEmpComments(e) {

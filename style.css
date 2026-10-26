@@ -279,11 +279,14 @@ table.data td.has-note::after {
 }
 #empTable td[data-c] { cursor: pointer; }
 /* pie charts (overall summary) */
-.pies { display: grid; gap: 18px; justify-items: center; }
-.pie { width: min(100%, 380px); }
+.pies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 900px) { .pies { grid-template-columns: 1fr; } }
+.pie { display: grid; gap: 10px; align-content: start; }
+.pie-calc { margin: 0; text-align: center; font-size: 13px; color: var(--muted); }
+.pie-calc b { color: var(--ink); }
 .pie h3 { font-size: 15px; font-weight: 700; margin: 0 0 10px; text-align: center; }
 .pie h3 span { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
-.pie-chart { position: relative; height: 280px; }
+.pie-chart { position: relative; height: 240px; }
 .pie-center {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   pointer-events: none; text-align: center;
@@ -308,3 +311,5 @@ table.data td.has-note::after {
 .pie-verdict.bad { background: #fdecea; color: var(--bad); }
 .pie-center .pie-total { margin-top: 4px; font-weight: 700; color: var(--ink); }
 .pie-legend li.pie-sum { font-weight: 700; border-bottom: 0; }
+.compare { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 18px; }
+.compare h3 { font-size: 15px; font-weight: 700; margin: 0 0 10px; text-align: center; }

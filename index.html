@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261026" />
+  <link rel="stylesheet" href="style.css?v=20261027" />
 </head>
 <body>
   <!-- Top bar -->
@@ -67,7 +67,7 @@
       <section id="view-overview" class="view">
         <div class="kpis" id="kpis"></div>
         <div class="panel">
-          <div class="panel-head"><h2>Actual vs Commitment</h2><span class="muted small" id="ovPieInfo"></span></div>
+          <div class="panel-head"><h2>Actual vs Commitment</h2><div class="controls"><span class="muted small" id="ovPieInfo"></span><select id="ovArea" aria-label="Task area"></select></div></div>
           <div class="pies" id="ovPies"></div>
         </div>
         <div class="grid-2">
@@ -93,7 +93,7 @@
           <div class="kpis" id="empKpis"></div>
 
           <div class="panel">
-            <div class="panel-head"><h2>Actual vs Commitment</h2><span class="muted small" id="empPieInfo"></span></div>
+            <div class="panel-head"><h2>Actual vs Commitment</h2><div class="controls"><span class="muted small" id="empPieInfo"></span><select id="empArea" aria-label="Task area"></select></div></div>
             <div class="pies" id="empPies"></div>
           </div>
 
@@ -147,6 +147,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="script.js?v=20261026"></script>
+  <script src="script.js?v=20261027"></script>
 </body>
 </html>
