@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261022" />
+  <link rel="stylesheet" href="style.css?v=20261026" />
 </head>
 <body>
   <!-- Top bar -->
@@ -67,10 +67,8 @@
       <section id="view-overview" class="view">
         <div class="kpis" id="kpis"></div>
         <div class="panel">
-          <div class="panel-head">
-            <h2>Planned vs done, by employee</h2>
-          </div>
-          <div class="chart-wrap tall"><canvas id="teamChart"></canvas></div>
+          <div class="panel-head"><h2>Actual vs Commitment</h2><span class="muted small" id="ovPieInfo"></span></div>
+          <div class="pies" id="ovPies"></div>
         </div>
         <div class="grid-2">
           <div class="panel">
@@ -95,6 +93,11 @@
           <div class="kpis" id="empKpis"></div>
 
           <div class="panel">
+            <div class="panel-head"><h2>Actual vs Commitment</h2><span class="muted small" id="empPieInfo"></span></div>
+            <div class="pies" id="empPies"></div>
+          </div>
+
+          <div class="panel">
             <div class="panel-head"><h2>Task areas</h2></div>
             <div class="table-wrap"><table id="empTable" class="data"></table></div>
           </div>
@@ -107,7 +110,6 @@
               </div>
             </div>
             <p class="muted small" id="weekInfo"></p>
-            <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
             <p class="muted small hint">Score / Commitment ke kisi bhi cell par click karke value likho aur Enter dabao, value turant Google Sheet mein save ho jaayegi.</p>
             <div class="table-wrap week-wrap"><table id="weekTable" class="week"></table></div>
           </div>
@@ -145,6 +147,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="script.js?v=20261022"></script>
+  <script src="script.js?v=20261026"></script>
 </body>
 </html>

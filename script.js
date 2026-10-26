@@ -320,22 +320,7 @@ function renderOverview() {
     { v: pct(t.delayRate), l: "Delayed (of done)", tone: t.delayRate > 0.2 ? "bad" : t.delayRate > 0.05 ? "warn" : "good" },
   ]);
 
-  const emps = [...d.employees].filter((e) => e.planned > 0).sort((a, b) => b.planned - a.planned);
-  drawChart("teamChart", {
-    type: "bar",
-    data: {
-      labels: emps.map((e) => e.name),
-      datasets: [
-        { label: "Planned", data: emps.map((e) => e.planned), backgroundColor: "#c9d3e6" },
-        { label: "Done by self", data: emps.map((e) => e.doneByMe || e.actualDone), backgroundColor: "#2b4c9b" },
-        { label: "Delayed", data: emps.map((e) => e.delayCount), backgroundColor: "#c27c12" },
-      ],
-    },
-    options: {
-      onClick: (_, els) => { if (els.length) selectEmployee(emps[els[0].index].name); },
-      scales: { x: { ticks: { autoSkip: false, maxRotation: 60 } } },
-    },
-  });
+  renderPies("ov", d.rows.filter((r) => r.team), t);
 
   const worst = [...d.employees].filter((e) => e.notDoneGap !== null && e.planned > 0)
     .sort((a, b) => b.notDoneGap - a.notDoneGap).slice(0, 8);
@@ -376,6 +361,8 @@ function renderEmployee() {
     { v: pct(e.delayRate), l: "Delay rate", tone: e.delayRate > 0.2 ? "bad" : e.delayRate > 0.05 ? "warn" : "good" },
   ]);
 
+  renderPies("emp", e.rows, e);
+
   // Task areas: bilkul sheet jaise columns (Team ke bina)
   const d = state.data, ac = d.cols.area;
   const cols = d.displayCols.filter(({ c }) => c !== d.cols.team);
@@ -409,8 +396,8 @@ function visibleWeeks() {
 }
 
 const METRICS = [
-  { k: "scoreNotDone", off: 0, label: "Score · Not done" },
-  { k: "scoreDelay", off: 1, label: "Score · Delay" },
+  { k: "scoreNotDone", off: 0, label: "Actual · Not done" },
+  { k: "scoreDelay", off: 1, label: "Actual · Delay" },
   { k: "commitNotDone", off: 2, label: "Commitment · Not done" },
   { k: "commitDelay", off: 3, label: "Commitment · Delay" },
 ];
@@ -423,39 +410,13 @@ function renderWeekly(e) {
     ? `${weeks[idx[0]].label} se ${weeks[idx[idx.length - 1]].label} tak · ${idx.length} weeks`
     : "Is range mein koi week nahi mila. Upar se 'All weeks' chuno.";
 
-  const colors = ["#b4372f", "#c27c12", "#2b4c9b", "#2e7d5b"];
-  drawChart("weekChart", {
-    type: "line",
-    data: {
-      labels: idx.map((i) => weeks[i].label),
-      datasets: METRICS.map((m, j) => ({
-        label: m.label, data: idx.map((i) => avgWeek(e, i, m.k)),
-        borderColor: colors[j], backgroundColor: colors[j],
-        tension: 0.3, spanGaps: true, pointRadius: 4, pointHoverRadius: 6,
-      })),
-    },
-    options: {
-      scales: {
-        y: { beginAtZero: true, title: { display: true, text: "Average (task areas ka)" } },
-      },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: (ctx) => ctx.raw === null ? `${ctx.dataset.label}: koi entry nahi`
-              : `${ctx.dataset.label}: ${Math.round(ctx.raw * 10) / 10} (${countWeek(e, idx[ctx.dataIndex], METRICS[ctx.datasetIndex].k)} task areas)`,
-          },
-        },
-      },
-    },
-  });
-
   if (!idx.length) { $("#weekTable").innerHTML = ""; return; }
 
   const rows = e.rows.filter((r) => !onlyFilled || idx.some((i) =>
     METRICS.some((m) => r.weekly[i][m.k] !== null || noteAt(r.gridRow, weeks[i].col + m.off))));
 
   const head1 = idx.map((i) => `<th colspan="4" class="wk">${esc(weeks[i].label)}</th>`).join("");
-  const head2 = idx.map(() => `<th colspan="2" class="sub">Score</th><th colspan="2" class="sub wk-end">Commitment</th>`).join("");
+  const head2 = idx.map(() => `<th colspan="2" class="sub" title="Score">Actual</th><th colspan="2" class="sub wk-end">Commitment</th>`).join("");
   const head3 = idx.map(() => `<th>Not done</th><th>Delay</th><th>Not done</th><th class="wk-end">Delay</th>`).join("");
 
   $("#weekTable").innerHTML = `
@@ -469,13 +430,91 @@ function renderWeekly(e) {
     }).join("")).join("")}</tr>`).join("")}</tbody>`;
 }
 
-// ek week ka average (jin task areas mein entry hai unka)
-const avgWeek = (e, i, k) => {
-  const vals = e.rows.map((r) => r.weekly[i][k]).filter((v) => v !== null);
-  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-};
-const countWeek = (e, i, k) => e.rows.filter((r) => r.weekly[i][k] !== null).length;
 const fmtWeekVal = (v) => (Math.abs(v) < 1 && v !== 0 ? pct(v) : fmt(v));
+
+/* ---- pie chart: Actual not done vs Commitment not done ---- */
+// weekly cell ko "kitna % not done" (0-100) mein: "-20" aur "-20%" dono = 20; plus wali value = 0
+function notDoneOf(v) {
+  if (v === null) return null;
+  const p = Math.abs(v) < 1 ? v * 100 : v; // "-20%" num() se -0.2 aata hai
+  return Math.min(100, Math.max(0, -p));
+}
+
+// chune hue weeks mein jitne cells bhare hain unka average not-done %
+function avgNotDone(rows, k) {
+  const vals = [];
+  for (const r of rows) for (const i of visibleWeeks()) {
+    const x = notDoneOf(r.weekly[i][k]);
+    if (x !== null) vals.push(x);
+  }
+  return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
+}
+
+// ek hi pie: Actual not done (sheet ka "Not Done" = planned mein se kitna nahi hua) vs Commitment not done
+// p = "ov" (overview) ya "emp" (employee report); t = summarize() wala total
+function renderPies(p, rows, t) {
+  const box = $(`#${p}Pies`);
+  if (!box.children.length) {
+    box.innerHTML = `
+      <div class="pie">
+        <div class="pie-chart"><canvas id="${p}Pie"></canvas><div class="pie-center" id="${p}Center"></div></div>
+        <ul class="pie-legend" id="${p}Legend"></ul>
+      </div>
+      <p class="pie-verdict" id="${p}Verdict"></p>`;
+  }
+
+  const weeks = state.data.weeks, idx = visibleWeeks();
+  $(`#${p}PieInfo`).textContent = idx.length
+    ? `Commitment: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""} (upar wala week range)`
+    : "Is week range mein koi week nahi. Upar se 'All weeks' chuno.";
+
+  const actual = t.notDoneGap === null ? null : t.notDoneGap * 100;
+  const com = avgNotDone(rows, "commitNotDone");
+  const slices = [
+    { label: "Actual", v: actual, color: "#b4372f", sub: `${fmt(Math.max(0, (t.planned || 0) - (t.doneByMe || t.actualDone || 0)))} / ${fmt(t.planned)} tasks` },
+    { label: "Commitment", v: com.notDone, color: "#c27c12", sub: com.n ? `${fmt(com.n)} entries ka average` : "koi entry nahi" },
+  ];
+  const has = slices.some((s) => s.v > 0);
+  // dono milake 100: total not done mein se kitna hissa actual ka, kitna commitment ka
+  const total = slices.reduce((a, s) => a + (s.v || 0), 0);
+  for (const s of slices) s.share = has ? ((s.v || 0) / total) * 100 : null;
+  drawChart(`${p}Pie`, {
+    type: "doughnut",
+    data: {
+      labels: has ? slices.map((s) => s.label) : ["No data"],
+      datasets: [{
+        data: has ? slices.map((s) => s.v || 0) : [1],
+        backgroundColor: has ? slices.map((s) => s.color) : ["#e3e7ee"],
+        borderColor: "#fff", borderWidth: 2,
+      }],
+    },
+    options: {
+      cutout: "62%",
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: has, callbacks: { label: (ctx) => `${ctx.label}: ${pct(slices[ctx.dataIndex].share / 100, 1)} (value ${pct(ctx.raw / 100, 1)})` } },
+      },
+    },
+  });
+
+  const show = (v) => (v === null ? "–" : pct(v / 100, 1));
+  $(`#${p}Center`).innerHTML = `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="warn small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`;
+  $(`#${p}Legend`).innerHTML = slices.map((s) =>
+    `<li><i style="background:${s.color}"></i><span>${s.label}<small>value ${show(s.v)} · ${esc(s.sub)}</small></span><b>${show(s.share)}</b></li>`).join("")
+    + (has ? `<li class="pie-sum"><span>Total (dono milake)</span><b>100%</b></li>` : "");
+
+  const v = $(`#${p}Verdict`);
+  if (actual === null || com.notDone === null) {
+    v.className = "pie-verdict";
+    v.textContent = actual === null ? "Planned tasks nahi hain, actual not done nahi nikal sakte." : "Is week range mein Commitment · Not done ke cells khaali hain.";
+  } else {
+    const gap = actual - com.notDone; // plus = commitment se zyada kaam baaki
+    v.className = `pie-verdict ${gap > 0.5 ? "bad" : "good"}`;
+    v.textContent = gap > 0.5 ? `Actual commitment se ${pct(gap / 100, 1)} zyada hai.`
+      : gap < -0.5 ? `Actual commitment se ${pct(-gap / 100, 1)} kam hai. Commitment se behtar.`
+      : "Actual aur commitment barabar hain.";
+  }
+}
 
 function renderEmpComments(e) {
   const d = state.data;
@@ -560,7 +599,7 @@ function renderSheetView() {
   const head1 = fixed.map(({ h, c }, k) =>
     `<th rowspan="3" class="${fxCls(k)} ${c === d.cols.team ? "st-team" : c === d.cols.area ? "st-area" : ""}">${esc(h)}</th>`).join("")
     + idx.map((i) => `<th colspan="4" class="wk wk-end">${esc(weeks[i].label)}</th>`).join("");
-  const head2 = idx.map(() => `<th colspan="2" class="sub">Score</th><th colspan="2" class="sub wk-end">Commitment</th>`).join("");
+  const head2 = idx.map(() => `<th colspan="2" class="sub" title="Score">Actual</th><th colspan="2" class="sub wk-end">Commitment</th>`).join("");
   const head3 = idx.map(() => `<th>Not done</th><th>Delay</th><th>Not done</th><th class="wk-end">Delay</th>`).join("");
 
   let prevTeam = "";
@@ -622,10 +661,11 @@ function downloadCSV() {
 /* ---- charts ---- */
 function drawChart(id, cfg) {
   if (typeof Chart === "undefined") return;
+  if (!document.getElementById(id).offsetWidth) return; // tab chhupa hai: khulne par switchView dobara banata hai
   const base = {
     responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { family: "Figtree" } } } },
-    scales: { y: { beginAtZero: true, grid: { color: "#eef1f5" } }, x: { grid: { display: false } } },
+    ...(cfg.type === "doughnut" ? {} : { scales: { y: { beginAtZero: true, grid: { color: "#eef1f5" } }, x: { grid: { display: false } } } }),
   };
   cfg.options = deepMerge(base, cfg.options || {});
   if (state.charts[id] && state.charts[id].config.type !== cfg.type) {
@@ -955,6 +995,7 @@ function switchView(v) {
   state.view = v;
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === v));
   $$(".view").forEach((s) => s.classList.toggle("active", s.id === `view-${v}`));
+  if (v === "overview" && state.data) renderOverview();
   if (v === "employee" && state.data) renderEmployee();
   if (v === "sheet") freezeFixedCols();
   Object.values(state.charts).forEach((c) => c.resize());
@@ -972,6 +1013,7 @@ function bind() {
   $("#weekRange").addEventListener("change", (e) => {
     store.set("mis_weeks", e.target.value);
     renderSheetView();
+    renderOverview();
     if (state.selectedEmp !== "__ALL__") renderEmployee();
   });
   $("#onlyFilledRows").addEventListener("change", renderEmployee);
