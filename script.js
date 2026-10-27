@@ -458,7 +458,7 @@ const PIES = [
   { k: "Delay", title: "Delay", actual: "scoreDelay", commit: "commitDelay" },
 ];
 
-// p = "ov" (overview) ya "emp" (employee report); rows = us scope ki task area rows
+// p = "ov" (overview), "emp" (employee report) ya "sh" (sheet view); rows = us scope ki task area rows
 function renderPies(p, rows) {
   const box = $(`#${p}Pies`);
   if (!box.children.length) {
@@ -470,7 +470,7 @@ function renderPies(p, rows) {
         <ul class="pie-legend" id="${p}${k}Legend"></ul>
         <p class="pie-verdict" id="${p}${k}Verdict"></p>
       </div>`).join("");
-    $(`#${p}Area`).addEventListener("change", () => (p === "ov" ? renderOverview() : renderEmployee()));
+    $(`#${p}Area`).addEventListener("change", () => ({ ov: renderOverview, emp: renderEmployee, sh: renderSheetHist })[p]());
   }
 
   // task area chuno: sab ya ek (jaise UAN N M)
@@ -647,57 +647,12 @@ function renderSheetView() {
   renderSheetHist();
 }
 
-/* ---- sheet view ke upar do line graph: har week ka Actual vs Commitment (pie jaisa data) ---- */
+/* ---- sheet view ke upar bhi wahi do pie (Employee report jaise), upar chune employee ke hisaab se ---- */
 function renderSheetHist() {
-  const d = state.data, idx = visibleWeeks();
-  const rows = d.rows.filter((r) => r.team && (state.selectedEmp === "__ALL__" || r.team === state.selectedEmp));
-  const show = (v) => (v === null ? "–" : pct(v / 100, 1));
-  $("#histInfo").textContent = (state.selectedEmp === "__ALL__" ? "All employees" : state.selectedEmp) +
-    (idx.length ? ` · ${d.weeks[idx[0]].label}${idx.length > 1 ? " – " + d.weeks[idx[idx.length - 1]].label : ""}` : "");
-  for (const { k, title, actual, commit } of PIES) {
-    drawChart(`hist${k}`, {
-      type: "line",
-      data: {
-        labels: idx.map((i) => d.weeks[i].label),
-        datasets: [
-          { label: `Actual ${title}`, data: idx.map((i) => avgNotDone(rows, actual, [i]).notDone), borderColor: "#b4372f", backgroundColor: "#b4372f", borderWidth: 3, tension: 0.3, spanGaps: true, pointRadius: 5, pointHoverRadius: 7 },
-          { label: `Commitment ${title}`, data: idx.map((i) => avgNotDone(rows, commit, [i]).notDone), borderColor: "#2f9e4f", backgroundColor: "#2f9e4f", borderWidth: 3, tension: 0.3, spanGaps: true, pointRadius: 5, pointHoverRadius: 7 },
-        ],
-      },
-      options: {
-        layout: { padding: { top: 22 } },
-        scales: { x: { offset: true }, y: { beginAtZero: true, ticks: { callback: (x) => x + "%" } } },
-        plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw === null ? "koi entry nahi" : show(ctx.raw)}` } } },
-      },
-      plugins: [barLabels(show)],
-    });
-  }
+  const rows = state.data.rows.filter((r) => r.team && (state.selectedEmp === "__ALL__" || r.team === state.selectedEmp));
+  renderPies("sh", rows);
 }
 
-// har bar / point ke upar uski value likho; khaali ki jagah "koi entry nahi" (kam weeks ho tab)
-function barLabels(show) {
-  return {
-    id: "barLabels",
-    afterDatasetsDraw(chart) {
-      const n = chart.data.labels.length;
-      if (n > 12) return; // bahut weeks: labels chadh jaayenge, tooltip kaafi hai
-      const { ctx } = chart;
-      ctx.save();
-      ctx.font = "700 12px Figtree, sans-serif";
-      ctx.textAlign = "center";
-      chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, j) => {
-        const v = ds.data[j];
-        if (v === null && n > 4) return;
-        ctx.fillStyle = v === null ? "#667085" : "#1c2536";
-        ctx.fillText(v === null ? "koi entry nahi" : show(v), bar.x, (v === null ? chart.scales.y.bottom : bar.y) - 6);
-      }));
-      ctx.restore();
-    },
-  };
-}
-
-// fixed columns ki chaudai naap ke har ek ka sticky "left" set karo.
-// Team se "Delay%" column tak hamesha freeze; Link aur weeks scroll.
 function freezeFixedCols() {
   const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];
   if (!ths.length || !ths[0].offsetWidth) return; // tab chhupa hai, dikhne par dobara
