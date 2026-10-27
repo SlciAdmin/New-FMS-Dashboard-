@@ -273,8 +273,23 @@ function renderAll() {
   if (at) focusCell(at);
 }
 
+// KPI card ka chhota icon: label ke shabd dekh ke (Delay pehle, kyunki "Delayed (of done)" mein done bhi hai)
+const KPI_ICONS = [
+  [/delay/i, '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>'],
+  [/employee/i, '<path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1"/><circle cx="9" cy="7" r="3.5"/><path d="M22 19v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>'],
+  [/planned/i, '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'],
+  [/others/i, '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>'],
+  [/done/i, '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'],
+  [/completion/i, '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M21 3v6h-6"/>'],
+];
 function kpiHTML(items) {
-  return items.map((k) => `<div class="kpi ${k.tone || ""}"><div class="v">${k.v}</div><div class="l">${k.l}</div></div>`).join("");
+  return items.map((k) => {
+    const icon = (KPI_ICONS.find(([re]) => re.test(k.l)) || [])[1] || KPI_ICONS[1][1];
+    return `<div class="kpi ${k.tone || ""}">
+      <span class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg></span>
+      <div><div class="v">${k.v}</div><div class="l">${k.l}</div></div>
+    </div>`;
+  }).join("");
 }
 
 /* ---- employee dropdown (upar, sheet wali dropdown ke paas) ---- */

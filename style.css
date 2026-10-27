@@ -375,3 +375,73 @@ table.week .wk-end { border-right: 2px solid #9aa5b8; }
 table.sheet tr.grp td { border-top: 2px solid #9aa5b8; }
 table.data { border: 1px solid var(--grid); }
 table.data th, table.data td { border: 1px solid var(--grid); }
+
+/* ================= UI polish: Shakti theme ================= */
+body { background: radial-gradient(1200px 400px at 100% 0, #e3f3ec 0, transparent 60%), var(--paper); }
+
+/* tabs: pill segmented control */
+.tabs {
+  display: inline-flex; gap: 4px; padding: 5px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); box-shadow: 0 1px 3px rgba(16,40,36,.06); margin-bottom: 22px;
+}
+.tab { border: 0; border-radius: 999px; padding: 8px 20px; margin: 0; }
+.tab:hover { color: var(--accent); background: var(--accent-soft); }
+.tab.active {
+  color: #fff; border: 0;
+  background: linear-gradient(120deg, var(--brand-teal), var(--accent) 55%, var(--brand-green));
+  box-shadow: 0 4px 12px rgba(21,122,92,.3);
+}
+
+/* KPI: alag cards, icon + upar rangeen patti */
+.kpis {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px;
+  background: none; border: 0; border-radius: 0; overflow: visible;
+}
+.kpi {
+  position: relative; display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(16,40,36,.06); overflow: hidden; transition: transform .2s, box-shadow .2s;
+}
+.kpi:last-child { border-right: 1px solid var(--line); }
+.kpi::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+  background: linear-gradient(90deg, var(--brand-teal), var(--brand-green));
+}
+.kpi.good::before { background: var(--done); }
+.kpi.warn::before { background: var(--warn); }
+.kpi.bad::before { background: var(--bad); }
+.kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,40,36,.1); }
+.kpi-ic {
+  display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.kpi-ic svg { width: 22px; height: 22px; }
+.kpi.good .kpi-ic { background: #e3f2ea; color: var(--done); }
+.kpi.warn .kpi-ic { background: #fbefd9; color: var(--warn); }
+.kpi.bad .kpi-ic { background: #f9e1df; color: var(--bad); }
+.kpi .v { font-size: 26px; line-height: 1.1; }
+
+/* panels: halki shadow, heading ke aage hara-teal nishaan */
+.panel { box-shadow: 0 1px 3px rgba(16,40,36,.06), 0 6px 18px rgba(16,40,36,.04); border-color: #dde6e3; }
+.panel-head h2 { display: flex; align-items: center; gap: 10px; }
+.panel-head h2::before {
+  content: ""; width: 5px; height: 20px; border-radius: 3px; flex: none;
+  background: linear-gradient(180deg, var(--brand-green), var(--brand-teal));
+}
+.emp-header h2 { color: var(--brand-dark); }
+
+/* buttons */
+.btn.ghost { background: var(--accent-soft); color: var(--accent); }
+.btn.ghost:hover { background: #cdeadf; }
+.topbar .btn { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.topbar .btn:hover { background: #e9f7f1; color: var(--accent); }
+
+/* tables: hara-teal header */
+table.week thead th, table.sheet thead th.fx, table.data th { background: #e8f3ef; color: #134e44; }
+table.week thead tr:nth-child(3) th { color: #3d6b62; }
+table.week tbody tr:hover td, table.data tbody tr:hover td { background-color: #f4faf7; }
+table.week tbody tr:hover td.ok, table.week tbody tr:hover td.bad { filter: brightness(.97); }
+
+/* pie verdict / inputs */
+.controls input, .controls select { border-radius: var(--radius-sm); }
+.controls input:focus, .controls select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
