@@ -457,3 +457,129 @@ table.week tbody tr:hover td.ok, table.week tbody tr:hover td.bad { filter: brig
 @media (max-width: 900px) { .hists { grid-template-columns: 1fr; } }
 .hist h3 { font-size: 14px; font-weight: 700; margin: 0 0 8px; text-align: center; }
 .pie-center b.commit { color: #2f9e4f; }
+
+/* ================= Header, filter bar, background, footer: attractive ================= */
+/* background: halke hare-teal dhabbe */
+body {
+  background:
+    radial-gradient(700px 420px at 105% 8%, rgba(47,158,79,.12), transparent 60%),
+    radial-gradient(600px 380px at -8% 45%, rgba(29,143,158,.10), transparent 60%),
+    radial-gradient(800px 500px at 50% 110%, rgba(47,158,79,.08), transparent 60%),
+    #f2f7f5;
+  background-attachment: fixed;
+}
+
+/* header: patte jaisa pattern + chamak; filter card iske upar tairta hai */
+.topbar {
+  position: relative; z-index: 1; padding: 18px 32px 54px; /* sticky nahi: filter card iske upar tairta hai */
+  background:
+    radial-gradient(circle at 88% -30%, rgba(76,203,141,.55), transparent 42%),
+    radial-gradient(circle at 12% 140%, rgba(29,143,158,.55), transparent 45%),
+    linear-gradient(115deg, #062724 0%, #0b3a35 40%, #0f5a4a 75%, #157a5c 100%);
+}
+.topbar::before { /* halka leaf pattern */
+  content: ""; position: absolute; inset: 0; opacity: .08; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M40 10c14 6 20 20 14 34-10-2-18-10-20-20-1-5 1-10 6-14z' fill='%23ffffff'/%3E%3Cpath d='M18 50c8 2 12 9 10 17-6 0-11-4-12-10 0-3 0-5 2-7z' fill='%23ffffff'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
+.topbar > * { position: relative; }
+.logo-tile {
+  width: 52px; height: 52px; border-radius: 14px;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.12), 0 8px 20px rgba(0,0,0,.25);
+}
+.logo-tile img { width: 38px; height: 38px; }
+.brand-text strong { font-size: 21px; text-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.sync { gap: 12px; }
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px; border-radius: 999px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(6px); font-size: 13px;
+}
+.btn-refresh {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
+  color: var(--brand-dark); font-weight: 700;
+}
+.btn-refresh svg { width: 16px; height: 16px; transition: transform .5s; }
+.btn-refresh:hover svg { transform: rotate(180deg); }
+
+/* filter bar: header ke upar tairta safed card */
+.filterbar {
+  position: relative; z-index: 5; margin: -34px 28px 0; padding: 14px 22px;
+  border: 1px solid #dbe7e3; border-radius: 16px; border-image: none;
+  background: rgba(255,255,255,.96); box-shadow: 0 12px 30px rgba(8,45,42,.14);
+}
+.filterbar::before {
+  content: ""; position: absolute; left: 16px; right: 16px; top: 0; height: 3px; border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, var(--brand-green), var(--brand-teal));
+}
+.filter span { display: inline-flex; align-items: center; gap: 6px; color: #3d6b62; }
+.filter span svg { width: 14px; height: 14px; color: var(--accent); }
+.filter select { border-radius: 10px; background-color: #f7fbf9; }
+.main { padding-top: 24px; }
+
+/* footer: lehar, jaankari, copyright patti */
+.site-footer {
+  position: relative; display: block; padding: 0; margin-top: 48px; border: 0; border-image: none;
+  background: linear-gradient(115deg, #062724 0%, #0b3a35 45%, #0f5a4a 100%); color: #cfe7df;
+}
+.footer-wave { position: absolute; left: 0; top: -47px; width: 100%; height: 48px; fill: #072a27; }
+.footer-main {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 32px;
+  padding: 22px 32px 18px;
+}
+.footer-logo {
+  display: grid; place-items: center; width: 46px; height: 46px; flex: none; border-radius: 12px; background: #fff;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.1);
+}
+.footer-brand img { background: none; padding: 0; width: 34px; height: 34px; }
+.footer-brand strong { font-size: 17px; }
+.footer-brand span { color: #8fd3b3; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; font-weight: 700; }
+.footer-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.footer-facts li {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; font-size: 13px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+}
+.footer-facts svg { width: 15px; height: 15px; color: #7fe0a8; flex: none; }
+.footer-bottom {
+  padding: 12px 32px; border-top: 1px solid rgba(255,255,255,.1); background: rgba(0,0,0,.15); text-align: center;
+}
+.footer-copy { font-size: 13px; color: #a9cfc5; }
+@media (max-width: 760px) {
+  .topbar { padding: 14px 16px 48px; }
+  .filterbar { margin: -30px 12px 0; }
+  .footer-main, .footer-bottom { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ================= safed panels ke background mein halki sajawat ================= */
+/* kone mein hara-teal rang + neeche right logo jaise do patton ka halka watermark */
+.panel {
+  position: relative;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cpath d='M150 20c50 22 72 80 48 132-40-6-72-36-78-76-3-22 6-42 30-56z' fill='%232f9e4f' fill-opacity='.07'/%3E%3Cpath d='M92 112c30 10 44 40 34 72-26-2-46-20-50-44-2-12 4-22 16-28z' fill='%231d8f9e' fill-opacity='.07'/%3E%3C/svg%3E") no-repeat right -30px bottom -40px / 240px 240px,
+    radial-gradient(520px 240px at 100% 0, rgba(47,158,79,.07), transparent 70%),
+    radial-gradient(420px 220px at 0 100%, rgba(29,143,158,.06), transparent 70%),
+    #fff;
+}
+/* sheet table wale panel par watermark nahi (numbers saaf dikhein), sirf halka rang */
+.panel.sheet-panel {
+  background:
+    radial-gradient(520px 200px at 100% 0, rgba(47,158,79,.06), transparent 70%),
+    #fff;
+}
+/* har pie apne halke hare card mein */
+.pie {
+  padding: 18px 18px 16px; border: 1px solid #e1ede8; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(240,248,244,.9), rgba(255,255,255,.85));
+  box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(16,40,36,.04);
+}
+.pie h3 {
+  display: inline-block; justify-self: center; padding: 6px 14px; border-radius: 999px;
+  background: #fff; border: 1px solid #dcebe5; color: var(--brand-dark);
+}
+.pie-legend li { padding: 8px 6px; }
+.pie-verdict { border: 1px solid transparent; }
+.pie-verdict.good { border-color: #cfe8db; }
+.pie-verdict.bad { border-color: #f3cfca; }
+/* "Highest not-done gap" list mein bhi halka hover */
+.rank li { border-radius: 8px; padding-left: 6px; padding-right: 6px; transition: background .15s; }
+.rank li:hover { background: rgba(47,158,79,.06); }
