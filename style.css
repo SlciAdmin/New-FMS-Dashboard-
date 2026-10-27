@@ -248,7 +248,13 @@ table.heat td {
 }
 
 /* sheet view */
-.sheet-wrap { max-height: calc(100vh - 290px); min-height: 360px; }
+.sheet-wrap { max-height: calc(100vh - 290px); min-height: 360px; overflow: scroll; } /* neeche aur side ka scrollbar hamesha dikhe */
+.sheet-wrap { scrollbar-width: auto; scrollbar-color: #9aa5b8 #eef1f5; }
+.sheet-wrap::-webkit-scrollbar { width: 14px; height: 14px; }
+.sheet-wrap::-webkit-scrollbar-track { background: #eef1f5; }
+.sheet-wrap::-webkit-scrollbar-thumb { background: #9aa5b8; border-radius: 7px; border: 3px solid #eef1f5; }
+.sheet-wrap::-webkit-scrollbar-thumb:hover { background: #6f7c93; }
+.sheet-wrap::-webkit-scrollbar-corner { background: #eef1f5; }
 table.sheet td { cursor: pointer; }
 table.sheet td.num { text-align: right; }
 table.sheet td.st-area, table.sheet td.st-team { text-align: left; }
