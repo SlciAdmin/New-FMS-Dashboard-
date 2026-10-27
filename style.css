@@ -1,11 +1,14 @@
 :root {
   --ink: #1c2536;
-  --paper: #eef1f5;
+  --paper: #f1f5f4;
   --surface: #ffffff;
   --line: #d9dfe7;
   --muted: #667085;
-  --accent: #2b4c9b;
-  --accent-soft: #e5ebf7;
+  --accent: #157a5c;          /* Shakti logo ka hara-teal */
+  --accent-soft: #e1f2ec;
+  --brand-dark: #0b3a35;
+  --brand-green: #2f9e4f;
+  --brand-teal: #1d8f9e;
   --done: #2e7d5b;
   --warn: #c27c12;
   --bad: #b4372f;
@@ -27,17 +30,57 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- top bar ---------- */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 14px 24px; background: var(--ink); color: #fff; position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 12px 28px; color: #fff; position: sticky; top: 0; z-index: 20; overflow: hidden;
+  background:
+    radial-gradient(circle at 92% -40%, rgba(47,158,79,.55), transparent 45%),
+    radial-gradient(circle at 70% 160%, rgba(29,143,158,.45), transparent 40%),
+    linear-gradient(115deg, #082d2a 0%, var(--brand-dark) 45%, #0f5a4a 100%);
+  box-shadow: 0 2px 14px rgba(8,45,42,.25);
 }
-.brand { display: flex; align-items: center; gap: 14px; }
-.brand h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
-.brand select {
-  background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.25);
-  border-radius: var(--radius-sm); padding: 6px 10px;
+.brand { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.logo-tile {
+  display: grid; place-items: center; width: 46px; height: 46px; flex: none;
+  background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.18);
 }
-.brand select option { color: var(--ink); }
-.brand { flex-wrap: wrap; }
+.brand-text { display: grid; line-height: 1.15; }
+.brand-text strong { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+.brand-text small {
+  font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  background: linear-gradient(90deg, #8fe0a6, #7fd3dd); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* filter bar: sheet / weeks / employee */
+.filterbar {
+  display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end;
+  padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--line);
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--brand-green), var(--brand-teal)) 1;
+}
+.filter { display: grid; gap: 4px; }
+.filter span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.filter select {
+  min-width: 170px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); font-weight: 600; cursor: pointer;
+}
+.filter select:hover { border-color: var(--accent); }
+.filter select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.filter-emp select { min-width: 280px; }
+
+/* footer */
+.site-footer {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
+  padding: 18px 28px; margin-top: 12px; color: #d8ece6;
+  background: linear-gradient(115deg, #082d2a 0%, var(--brand-dark) 55%, #0f5a4a 100%);
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--brand-green), var(--brand-teal)) 1;
+}
+.footer-brand { display: flex; align-items: center; gap: 12px; }
+.footer-brand img { background: #fff; border-radius: 8px; padding: 3px; width: 36px; height: 36px; }
+.footer-brand div { display: grid; line-height: 1.3; }
+.footer-brand strong { color: #fff; font-size: 15px; }
+.footer-brand span, .footer-copy { font-size: 13px; color: #a9cfc5; }
+.footer-copy { margin: 0; }
 .sync { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #9aa3b2; }
 .dot.live { background: #4ccb8d; box-shadow: 0 0 0 4px rgba(76,203,141,.25); }
@@ -53,7 +96,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .btn.ghost:hover { background: #d6e0f3; }
 
 /* ---------- layout ---------- */
-.layout { min-height: calc(100vh - 60px); }
+body { display: flex; flex-direction: column; }
+.layout { flex: 1; } /* chhota content ho to bhi footer screen ke neeche tike */
 .brand #empSelect { min-width: 220px; max-width: 320px; }
 
 .roster {

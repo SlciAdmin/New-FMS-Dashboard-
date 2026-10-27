@@ -1090,6 +1090,7 @@ function bind() {
   $("#hideEmpty").addEventListener("change", renderSheetView);
   $("#sheetSearch").addEventListener("input", renderSheetView);
 
+  $("#year").textContent = new Date().getFullYear();
   $("#refreshBtn").addEventListener("click", () => { state.signature = ""; load(); });
   $("#empSelect").addEventListener("change", (e) => selectEmployee(e.target.value));
   $("#worstList").addEventListener("click", (e) => {

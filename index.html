@@ -3,32 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NDR MIS Dashboard</title>
+  <title>NDR MIS · Shakti Legal Compliance India</title>
+  <link rel="icon" type="image/png" href="logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=202610276" />
+  <link rel="stylesheet" href="style.css?v=202610277" />
 </head>
 <body>
-  <!-- Top bar -->
+  <!-- Header: logo + naam -->
   <header class="topbar">
-    <div class="brand">
-      <h1>NDR MIS</h1>
-      <select id="sheetSelect" aria-label="Sheet tab">
-        <option value="MIS-2025">MIS-2025</option>
-        <option value="MIS-HOD-2025">MIS-HOD-2025</option>
-      </select>
-      <select id="weekRange" aria-label="Weeks to show">
-        <option value="2w">Last 2 weeks</option>
-        <option value="4w">Last 4 weeks</option>
-        <option value="2">Last 2 months</option>
-        <option value="3">Last 3 months</option>
-        <option value="all">All weeks</option>
-      </select>
-      <select id="empSelect" aria-label="Employee">
-        <option value="__ALL__">All employees</option>
-      </select>
-    </div>
+    <a class="brand" href="./" title="Shakti Legal Compliance India">
+      <span class="logo-tile"><img src="logo.png" alt="Shakti Legal Compliance India logo" width="34" height="34" /></span>
+      <span class="brand-text">
+        <strong>Shakti Legal Compliance India</strong>
+        <small>NDR MIS Dashboard</small>
+      </span>
+    </a>
 
     <div class="sync">
       <span id="syncDot" class="dot" aria-hidden="true"></span>
@@ -36,6 +27,30 @@
       <button id="refreshBtn" class="btn">Refresh now</button>
     </div>
   </header>
+
+  <!-- Filters: sheet, weeks, employee -->
+  <div class="filterbar">
+    <label class="filter"><span>Sheet</span>
+      <select id="sheetSelect">
+        <option value="MIS-2025">MIS-2025</option>
+        <option value="MIS-HOD-2025">MIS-HOD-2025</option>
+      </select>
+    </label>
+    <label class="filter"><span>Weeks</span>
+      <select id="weekRange">
+        <option value="2w">Last 2 weeks</option>
+        <option value="4w">Last 4 weeks</option>
+        <option value="2">Last 2 months</option>
+        <option value="3">Last 3 months</option>
+        <option value="all">All weeks</option>
+      </select>
+    </label>
+    <label class="filter filter-emp"><span>Employee</span>
+      <select id="empSelect">
+        <option value="__ALL__">All employees</option>
+      </select>
+    </label>
+  </div>
 
   <div class="layout">
     <!-- Main -->
@@ -129,9 +144,20 @@
     <button id="saveBtn" class="btn primary" type="button">Save</button>
   </div>
 
+  <footer class="site-footer">
+    <div class="footer-brand">
+      <img src="logo.png" alt="" width="30" height="30" />
+      <div>
+        <strong>Shakti Legal Compliance India</strong>
+        <span>NDR MIS Dashboard · live data from Google Sheet</span>
+      </div>
+    </div>
+    <p class="footer-copy">© <span id="year">2026</span> Shakti Legal Compliance India. All rights reserved.</p>
+  </footer>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="script.js?v=202610276"></script>
+  <script src="script.js?v=202610277"></script>
 </body>
 </html>
