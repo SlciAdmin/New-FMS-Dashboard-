@@ -3,7 +3,7 @@
    ===================================================================== */
 
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzSvLicapCoiP7JQAXkUF4ryq4TjHfORfsrq02QtDA2vRiq3pW_UowXtplxtv1_cVpt/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzGlAQw7vmWmjyB_YHERVipvug0Ab90lOt7NN3X6jWxJ84Lejv-sT3UgBVDKVm9_ZmE/exec",
   SCRIPT_KEY: "ndr-mis-8472-xyz",   // Code.gs wala SECRET_KEY (dono jagah same)
   DEFAULT_SHEET: "MIS-2025",
   REFRESH_SECONDS: 60,              // kitne second mein sheet dobara check ho
@@ -441,9 +441,9 @@ function notDoneOf(v) {
 }
 
 // chune hue weeks mein jitne cells bhare hain unka average not-done %
-function avgNotDone(rows, k) {
+function avgNotDone(rows, k, idx = visibleWeeks()) {
   const vals = [];
-  for (const r of rows) for (const i of visibleWeeks()) {
+  for (const r of rows) for (const i of idx) {
     const x = notDoneOf(r.weekly[i][k]);
     if (x !== null) vals.push(x);
   }
@@ -473,6 +473,16 @@ function renderPies(p, rows) {
       <div class="compare">
         <h3>Comparison: Actual vs Commitment</h3>
         <div class="chart-wrap"><canvas id="${p}Compare"></canvas></div>
+      </div>
+      <div class="compare">
+        <h3>Week-wise Not done: Actual vs Commitment</h3>
+        <p class="pie-calc">Actual = har Monday sheet ke Score · Not done mein apne aap bhara "Not Done"</p>
+        <div class="chart-wrap"><canvas id="${p}WeekNotDone"></canvas></div>
+      </div>
+      <div class="compare">
+        <h3>Week-wise Delay: Actual vs Commitment</h3>
+        <p class="pie-calc">Actual = har Monday sheet ke Score · Delay mein apne aap bhara "Delay%"</p>
+        <div class="chart-wrap"><canvas id="${p}WeekDelay"></canvas></div>
       </div>`;
     $(`#${p}Area`).addEventListener("change", () => (p === "ov" ? renderOverview() : renderEmployee()));
   }
@@ -571,6 +581,26 @@ function renderPies(p, rows) {
     },
     plugins: [barLabels(show)],
   });
+
+  // week-wise: har week ka Actual (Score, Monday ko bhara) vs us week ki Commitment
+  for (const [id, a, c] of [["WeekNotDone", "scoreNotDone", "commitNotDone"], ["WeekDelay", "scoreDelay", "commitDelay"]]) {
+    drawChart(`${p}${id}`, {
+      type: "bar",
+      data: {
+        labels: idx.map((i) => weeks[i].label),
+        datasets: [
+          { label: "Actual", data: idx.map((i) => avgNotDone(use, a, [i]).notDone), backgroundColor: "#b4372f", borderRadius: 4, maxBarThickness: 48 },
+          { label: "Commitment", data: idx.map((i) => avgNotDone(use, c, [i]).notDone), backgroundColor: "#c27c12", borderRadius: 4, maxBarThickness: 48 },
+        ],
+      },
+      options: {
+        layout: { padding: { top: 24 } },
+        scales: { y: { ticks: { callback: (v) => v + "%" } } },
+        plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw === null ? "koi entry nahi" : show(ctx.raw)}` } } },
+      },
+      plugins: [barLabels(show)],
+    });
+  }
 }
 
 // har bar ke upar uski value likho (khaali value par "koi entry nahi")
@@ -582,8 +612,11 @@ function barLabels(show) {
       ctx.save();
       ctx.font = "700 13px Figtree, sans-serif";
       ctx.textAlign = "center";
+      const n = chart.data.labels.length;
+      if (n > 12) { ctx.restore(); return; } // bahut weeks: labels ek doosre par chadhenge, tooltip kaafi hai
       chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, j) => {
         const v = ds.data[j];
+        if (v === null && n > 4) return;
         ctx.fillStyle = v === null ? "#667085" : "#1c2536";
         ctx.fillText(v === null ? "koi entry nahi" : show(v), bar.x, (v === null ? chart.scales.y.bottom : bar.y) - 6);
       }));
