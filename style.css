@@ -249,12 +249,13 @@ table.heat td {
 
 /* sheet view */
 .sheet-wrap { max-height: calc(100vh - 290px); min-height: 360px; overflow: scroll; } /* neeche aur side ka scrollbar hamesha dikhe */
-.sheet-wrap { scrollbar-width: auto; scrollbar-color: #9aa5b8 #eef1f5; }
-.sheet-wrap::-webkit-scrollbar { width: 14px; height: 14px; }
-.sheet-wrap::-webkit-scrollbar-track { background: #eef1f5; }
-.sheet-wrap::-webkit-scrollbar-thumb { background: #9aa5b8; border-radius: 7px; border: 3px solid #eef1f5; }
-.sheet-wrap::-webkit-scrollbar-thumb:hover { background: #6f7c93; }
-.sheet-wrap::-webkit-scrollbar-corner { background: #eef1f5; }
+/* Chrome/Edge: mota, saaf scrollbar (scrollbar-color lagane se ye custom style band ho jaata, isliye nahi lagaya) */
+.sheet-wrap::-webkit-scrollbar { width: 16px; height: 16px; }
+.sheet-wrap::-webkit-scrollbar-track { background: #dfe4ec; border-radius: 8px; }
+.sheet-wrap::-webkit-scrollbar-thumb { background: #7d8aa3; border-radius: 8px; border: 3px solid #dfe4ec; min-width: 60px; }
+.sheet-wrap::-webkit-scrollbar-thumb:hover { background: #2b4c9b; }
+.sheet-wrap::-webkit-scrollbar-corner { background: #dfe4ec; }
+@supports not selector(::-webkit-scrollbar) { .sheet-wrap { scrollbar-width: auto; scrollbar-color: #7d8aa3 #dfe4ec; } } /* Firefox */
 table.sheet td { cursor: pointer; }
 table.sheet td.num { text-align: right; }
 table.sheet td.st-area, table.sheet td.st-team { text-align: left; }
