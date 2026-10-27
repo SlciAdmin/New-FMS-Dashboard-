@@ -321,3 +321,13 @@ table.data td.has-note::after {
 .compare h3 { font-size: 15px; font-weight: 700; margin: 0 0 10px; text-align: center; }
 .pie h4 { font-size: 13px; font-weight: 700; color: var(--muted); margin: 14px 0 0; text-align: center; text-transform: uppercase; letter-spacing: .04em; }
 .chart-wrap.short { height: 200px; }
+
+/* har cell ka border (Excel jaisa): sheet view, weekly report aur baaki tables; naye cells par bhi apne aap */
+:root { --grid: #cfd6e0; }
+table.week th, table.week td { border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); }
+table.week thead tr:first-child th { border-top: 1px solid var(--grid); }
+table.week thead tr:first-child > :first-child, table.week tbody tr > :first-child { border-left: 1px solid var(--grid); }
+table.week .wk-end { border-right: 2px solid #9aa5b8; }
+table.sheet tr.grp td { border-top: 2px solid #9aa5b8; }
+table.data { border: 1px solid var(--grid); }
+table.data th, table.data td { border: 1px solid var(--grid); }
