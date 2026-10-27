@@ -450,7 +450,7 @@ function avgNotDone(rows, k, idx = visibleWeeks()) {
   return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
 }
 
-// do hisse, har ek mein sheet ke weekly cells ka Actual vs Commitment comparison:
+// do pie, har ek mein sheet ke weekly cells ka Actual vs Commitment comparison (dono milake 100%):
 //   Not done: Actual · Not done vs Commitment · Not done    Delay: Actual · Delay vs Commitment · Delay
 // (Actual cells har Monday "Not Done" / "Delay%" se apne aap bharte hain)
 const PIES = [
@@ -469,10 +469,6 @@ function renderPies(p, rows) {
         <div class="pie-chart"><canvas id="${p}Pie${k}"></canvas><div class="pie-center" id="${p}${k}Center"></div></div>
         <ul class="pie-legend" id="${p}${k}Legend"></ul>
         <p class="pie-verdict" id="${p}${k}Verdict"></p>
-        <h4>Actual vs Commitment</h4>
-        <div class="chart-wrap short"><canvas id="${p}Bar${k}"></canvas></div>
-        <h4>Week-wise</h4>
-        <div class="chart-wrap"><canvas id="${p}Week${k}"></canvas></div>
       </div>`).join("");
     $(`#${p}Area`).addEventListener("change", () => (p === "ov" ? renderOverview() : renderEmployee()));
   }
@@ -491,14 +487,14 @@ function renderPies(p, rows) {
 
   const show = (v) => (v === null ? "–" : pct(v / 100, 1));
   const entries = (a) => (a.n ? `${fmt(a.n)} entries ka average` : "koi entry nahi");
-  const RED = "#b4372f", AMBER = "#c27c12";
+  const RED = "#b4372f", GREEN = "#2f9e4f"; // Actual laal, Commitment hara
 
   for (const { k, title, actual: ak, commit: ck } of PIES) {
     const act = avgNotDone(use, ak), com = avgNotDone(use, ck);
     const a = act.notDone, c = com.notDone;
     const slices = [
       { label: `Actual ${title}`, v: a, color: RED, sub: entries(act) },
-      { label: `Commitment ${title}`, v: c, color: AMBER, sub: entries(com) },
+      { label: `Commitment ${title}`, v: c, color: GREEN, sub: entries(com) },
     ];
     const total = (a || 0) + (c || 0);
     const has = a !== null && c !== null && total > 0; // dono value chahiye, warna 100/0 galat dikhega
@@ -525,7 +521,7 @@ function renderPies(p, rows) {
     });
     $(`#${p}${k}Calc`).innerHTML = `Actual ${title}: <b>${show(a)}</b> &nbsp;vs&nbsp; Commitment ${title}: <b>${show(c)}</b>`;
     $(`#${p}${k}Center`).innerHTML = has
-      ? `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="warn small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`
+      ? `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="commit small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`
       : `<b class="bad">${show(a)}</b><span>Actual</span><span>Commitment: ${show(c)}</span>`;
     $(`#${p}${k}Legend`).innerHTML = slices.map((s) =>
       `<li><i style="background:${s.color}"></i><span>${s.label}<small>value ${show(s.v)} · ${esc(s.sub)}</small></span><b>${show(s.share)}</b></li>`).join("")
@@ -543,61 +539,7 @@ function renderPies(p, rows) {
         : `Actual aur commitment ${title} barabar hain.`;
     }
 
-    // 2) do bar: Actual vs Commitment (bar ke upar % likha)
-    drawChart(`${p}Bar${k}`, {
-      type: "bar",
-      data: {
-        labels: [`Actual ${title}`, `Commitment ${title}`],
-        datasets: [{ label: title, data: [a, c], backgroundColor: [RED, AMBER], borderRadius: 4, maxBarThickness: 90 }],
-      },
-      options: {
-        layout: { padding: { top: 24 } },
-        scales: { y: { ticks: { callback: (x) => x + "%" } } },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${show(ctx.raw)}` } } },
-      },
-      plugins: [barLabels(show)],
-    });
-
-    // 3) week-wise: har week ka Actual vs us week ki Commitment
-    drawChart(`${p}Week${k}`, {
-      type: "bar",
-      data: {
-        labels: idx.map((i) => weeks[i].label),
-        datasets: [
-          { label: `Actual ${title}`, data: idx.map((i) => avgNotDone(use, ak, [i]).notDone), backgroundColor: RED, borderRadius: 4, maxBarThickness: 40 },
-          { label: `Commitment ${title}`, data: idx.map((i) => avgNotDone(use, ck, [i]).notDone), backgroundColor: AMBER, borderRadius: 4, maxBarThickness: 40 },
-        ],
-      },
-      options: {
-        layout: { padding: { top: 24 } },
-        scales: { y: { ticks: { callback: (x) => x + "%" } } },
-        plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw === null ? "koi entry nahi" : show(ctx.raw)}` } } },
-      },
-      plugins: [barLabels(show)],
-    });
   }
-}
-
-// har bar ke upar uski value likho (khaali value par "koi entry nahi")
-function barLabels(show) {
-  return {
-    id: "barLabels",
-    afterDatasetsDraw(chart) {
-      const { ctx } = chart;
-      ctx.save();
-      ctx.font = "700 13px Figtree, sans-serif";
-      ctx.textAlign = "center";
-      const n = chart.data.labels.length;
-      if (n > 12) { ctx.restore(); return; } // bahut weeks: labels ek doosre par chadhenge, tooltip kaafi hai
-      chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, j) => {
-        const v = ds.data[j];
-        if (v === null && n > 4) return;
-        ctx.fillStyle = v === null ? "#667085" : "#1c2536";
-        ctx.fillText(v === null ? "koi entry nahi" : show(v), bar.x, (v === null ? chart.scales.y.bottom : bar.y) - 6);
-      }));
-      ctx.restore();
-    },
-  };
 }
 
 function renderEmpComments(e) {
@@ -702,6 +644,56 @@ function renderSheetView() {
     <thead><tr>${head1}</tr><tr>${head2}</tr><tr>${head3}</tr></thead>
     <tbody>${body || `<tr><td class="muted" colspan="20">Koi row nahi mili.</td></tr>`}</tbody>`;
   freezeFixedCols();
+  renderSheetHist();
+}
+
+/* ---- sheet view ke upar do line graph: har week ka Actual vs Commitment (pie jaisa data) ---- */
+function renderSheetHist() {
+  const d = state.data, idx = visibleWeeks();
+  const rows = d.rows.filter((r) => r.team && (state.selectedEmp === "__ALL__" || r.team === state.selectedEmp));
+  const show = (v) => (v === null ? "–" : pct(v / 100, 1));
+  $("#histInfo").textContent = (state.selectedEmp === "__ALL__" ? "All employees" : state.selectedEmp) +
+    (idx.length ? ` · ${d.weeks[idx[0]].label}${idx.length > 1 ? " – " + d.weeks[idx[idx.length - 1]].label : ""}` : "");
+  for (const { k, title, actual, commit } of PIES) {
+    drawChart(`hist${k}`, {
+      type: "line",
+      data: {
+        labels: idx.map((i) => d.weeks[i].label),
+        datasets: [
+          { label: `Actual ${title}`, data: idx.map((i) => avgNotDone(rows, actual, [i]).notDone), borderColor: "#b4372f", backgroundColor: "#b4372f", borderWidth: 3, tension: 0.3, spanGaps: true, pointRadius: 5, pointHoverRadius: 7 },
+          { label: `Commitment ${title}`, data: idx.map((i) => avgNotDone(rows, commit, [i]).notDone), borderColor: "#2f9e4f", backgroundColor: "#2f9e4f", borderWidth: 3, tension: 0.3, spanGaps: true, pointRadius: 5, pointHoverRadius: 7 },
+        ],
+      },
+      options: {
+        layout: { padding: { top: 22 } },
+        scales: { x: { offset: true }, y: { beginAtZero: true, ticks: { callback: (x) => x + "%" } } },
+        plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw === null ? "koi entry nahi" : show(ctx.raw)}` } } },
+      },
+      plugins: [barLabels(show)],
+    });
+  }
+}
+
+// har bar / point ke upar uski value likho; khaali ki jagah "koi entry nahi" (kam weeks ho tab)
+function barLabels(show) {
+  return {
+    id: "barLabels",
+    afterDatasetsDraw(chart) {
+      const n = chart.data.labels.length;
+      if (n > 12) return; // bahut weeks: labels chadh jaayenge, tooltip kaafi hai
+      const { ctx } = chart;
+      ctx.save();
+      ctx.font = "700 12px Figtree, sans-serif";
+      ctx.textAlign = "center";
+      chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, j) => {
+        const v = ds.data[j];
+        if (v === null && n > 4) return;
+        ctx.fillStyle = v === null ? "#667085" : "#1c2536";
+        ctx.fillText(v === null ? "koi entry nahi" : show(v), bar.x, (v === null ? chart.scales.y.bottom : bar.y) - 6);
+      }));
+      ctx.restore();
+    },
+  };
 }
 
 // fixed columns ki chaudai naap ke har ek ka sticky "left" set karo.
@@ -1082,7 +1074,7 @@ function switchView(v) {
   $$(".view").forEach((s) => s.classList.toggle("active", s.id === `view-${v}`));
   if (v === "overview" && state.data) renderOverview();
   if (v === "employee" && state.data) renderEmployee();
-  if (v === "sheet") freezeFixedCols();
+  if (v === "sheet") { freezeFixedCols(); if (state.data) renderSheetHist(); }
   Object.values(state.charts).forEach((c) => c.resize());
 }
 

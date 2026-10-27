@@ -445,3 +445,9 @@ table.week tbody tr:hover td.ok, table.week tbody tr:hover td.bad { filter: brig
 /* pie verdict / inputs */
 .controls input, .controls select { border-radius: var(--radius-sm); }
 .controls input:focus, .controls select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+/* sheet view ke upar histogram */
+.hists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 900px) { .hists { grid-template-columns: 1fr; } }
+.hist h3 { font-size: 14px; font-weight: 700; margin: 0 0 8px; text-align: center; }
+.pie-center b.commit { color: #2f9e4f; }
