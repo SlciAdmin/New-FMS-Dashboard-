@@ -277,29 +277,14 @@ function kpiHTML(items) {
   return items.map((k) => `<div class="kpi ${k.tone || ""}"><div class="v">${k.v}</div><div class="l">${k.l}</div></div>`).join("");
 }
 
-/* ---- roster ---- */
+/* ---- employee dropdown (upar, sheet wali dropdown ke paas) ---- */
 function renderRoster() {
-  const q = $("#empSearch").value.trim().toLowerCase();
-  const sortBy = $("#empSort").value;
-  const list = state.data.employees.filter((e) => e.name.toLowerCase().includes(q));
-  list.sort({
-    name: (a, b) => a.name.localeCompare(b.name),
-    completion: (a, b) => (b.completion ?? -1) - (a.completion ?? -1),
-    delay: (a, b) => (b.delayRate ?? -1) - (a.delayRate ?? -1),
-    planned: (a, b) => b.planned - a.planned,
-  }[sortBy]);
-
-  const t = state.data.totals;
-  $("#allMeta").innerHTML = `<span>${state.data.employees.length} employees</span><span>${pct(t.completion)} done</span>`;
-  $(".roster-item.all").classList.toggle("active", state.selectedEmp === "__ALL__");
-  $("#rosterList").innerHTML = list.length
-    ? list.map((e) => `
-      <button class="roster-item ${state.selectedEmp === e.name ? "active" : ""}" data-emp="${esc(e.name)}">
-        <span class="r-name">${esc(e.name)}${empNoteCount(e) ? ` <span class="note-count" title="Comments">💬 ${empNoteCount(e)}</span>` : ""}</span>
-        <span class="r-meta"><span>${fmt(e.doneByMe || e.actualDone)} / ${fmt(e.planned)} tasks</span><span>${pct(e.completion)}</span></span>
-        <span class="bar ${toneBar(e.completion)}"><span style="width:${Math.min(100, (e.completion || 0) * 100)}%"></span></span>
-      </button>`).join("")
-    : `<p class="empty small">No employee matches "${esc(q)}".</p>`;
+  const d = state.data, t = d.totals;
+  const list = [...d.employees].sort((a, b) => a.name.localeCompare(b.name));
+  const sel = $("#empSelect");
+  sel.innerHTML = `<option value="__ALL__">All employees (${list.length}) · ${pct(t.completion)} done</option>` +
+    list.map((e) => `<option value="${esc(e.name)}">${esc(e.name)} · ${pct(e.completion)} done</option>`).join("");
+  sel.value = state.selectedEmp;
 }
 
 function empNoteCount(e) {
@@ -450,12 +435,12 @@ function avgNotDone(rows, k, idx = visibleWeeks()) {
   return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
 }
 
-// do pie, sheet jaisa hisaab, dono mein Actual vs Commitment milake 100%:
-//   Not done = pending / planned   (jaise UAN: 3 / 41 = 7%)
-//   Delay    = delayed / done      (jaise UAN: 26 / 38 = 68%)
+// do hisse, har ek mein sheet ke weekly cells ka Actual vs Commitment comparison:
+//   Not done: Actual · Not done vs Commitment · Not done    Delay: Actual · Delay vs Commitment · Delay
+// (Actual cells har Monday "Not Done" / "Delay%" se apne aap bharte hain)
 const PIES = [
-  { k: "NotDone", title: "Not done", commit: "commitNotDone" },
-  { k: "Delay", title: "Delay", commit: "commitDelay" },
+  { k: "NotDone", title: "Not done", actual: "scoreNotDone", commit: "commitNotDone" },
+  { k: "Delay", title: "Delay", actual: "scoreDelay", commit: "commitDelay" },
 ];
 
 // p = "ov" (overview) ya "emp" (employee report); rows = us scope ki task area rows
@@ -464,26 +449,16 @@ function renderPies(p, rows) {
   if (!box.children.length) {
     box.innerHTML = PIES.map(({ k, title }) => `
       <div class="pie">
-        <h3>${title}</h3>
+        <h3>Actual ${title} vs Commitment ${title}</h3>
         <p class="pie-calc" id="${p}${k}Calc"></p>
         <div class="pie-chart"><canvas id="${p}Pie${k}"></canvas><div class="pie-center" id="${p}${k}Center"></div></div>
         <ul class="pie-legend" id="${p}${k}Legend"></ul>
         <p class="pie-verdict" id="${p}${k}Verdict"></p>
-      </div>`).join("") + `
-      <div class="compare">
-        <h3>Comparison: Actual vs Commitment</h3>
-        <div class="chart-wrap"><canvas id="${p}Compare"></canvas></div>
-      </div>
-      <div class="compare">
-        <h3>Week-wise Not done: Actual vs Commitment</h3>
-        <p class="pie-calc">Actual = har Monday sheet ke Score · Not done mein apne aap bhara "Not Done"</p>
-        <div class="chart-wrap"><canvas id="${p}WeekNotDone"></canvas></div>
-      </div>
-      <div class="compare">
-        <h3>Week-wise Delay: Actual vs Commitment</h3>
-        <p class="pie-calc">Actual = har Monday sheet ke Score · Delay mein apne aap bhara "Delay%"</p>
-        <div class="chart-wrap"><canvas id="${p}WeekDelay"></canvas></div>
-      </div>`;
+        <h4>Actual vs Commitment</h4>
+        <div class="chart-wrap short"><canvas id="${p}Bar${k}"></canvas></div>
+        <h4>Week-wise</h4>
+        <div class="chart-wrap"><canvas id="${p}Week${k}"></canvas></div>
+      </div>`).join("");
     $(`#${p}Area`).addEventListener("change", () => (p === "ov" ? renderOverview() : renderEmployee()));
   }
 
@@ -496,34 +471,25 @@ function renderPies(p, rows) {
 
   const weeks = state.data.weeks, idx = visibleWeeks();
   $(`#${p}PieInfo`).textContent = idx.length
-    ? `Commitment: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}`
+    ? `Weeks: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}`
     : "Is week range mein koi week nahi";
 
-  const t = summarize(use);
-  const done = t.doneByMe || t.actualDone || 0, pending = Math.max(0, (t.planned || 0) - done);
   const show = (v) => (v === null ? "–" : pct(v / 100, 1));
-  const actual = {
-    NotDone: t.notDoneGap === null ? null : t.notDoneGap * 100,
-    Delay: t.delayRate === null ? null : t.delayRate * 100,
-  };
-  const calc = {
-    NotDone: t.planned ? `Planned ${fmt(t.planned)} · Done ${fmt(done)} · Pending ${fmt(pending)} → ${fmt(pending)} ÷ ${fmt(t.planned)} = <b>${show(actual.NotDone)}</b>` : "Koi planned task nahi",
-    Delay: done ? `Done ${fmt(done)} · Delayed ${fmt(t.delayCount)} → ${fmt(t.delayCount)} ÷ ${fmt(done)} = <b>${show(actual.Delay)}</b>` : "Koi done task nahi",
-  };
+  const entries = (a) => (a.n ? `${fmt(a.n)} entries ka average` : "koi entry nahi");
+  const RED = "#b4372f", AMBER = "#c27c12";
 
-  const bars = { actual: [], commit: [] };
-  for (const { k, commit } of PIES) {
-    const com = avgNotDone(use, commit);
-    bars.actual.push(actual[k]);
-    bars.commit.push(com.notDone);
+  for (const { k, title, actual: ak, commit: ck } of PIES) {
+    const act = avgNotDone(use, ak), com = avgNotDone(use, ck);
+    const a = act.notDone, c = com.notDone;
     const slices = [
-      { label: "Actual", v: actual[k], color: "#b4372f", sub: k === "NotDone" ? `${fmt(pending)} / ${fmt(t.planned)} tasks` : `${fmt(t.delayCount)} / ${fmt(done)} tasks` },
-      { label: "Commitment", v: com.notDone, color: "#c27c12", sub: com.n ? `${fmt(com.n)} entries ka average` : "koi entry nahi" },
+      { label: `Actual ${title}`, v: a, color: RED, sub: entries(act) },
+      { label: `Commitment ${title}`, v: c, color: AMBER, sub: entries(com) },
     ];
-    const total = slices.reduce((a, s) => a + (s.v || 0), 0);
-    const has = slices.every((s) => s.v !== null) && total > 0; // dono value chahiye, warna 100/0 galat dikhega
+    const total = (a || 0) + (c || 0);
+    const has = a !== null && c !== null && total > 0; // dono value chahiye, warna 100/0 galat dikhega
     for (const s of slices) s.share = has ? ((s.v || 0) / total) * 100 : null;
 
+    // 1) pie: dono milake 100%
     drawChart(`${p}Pie${k}`, {
       type: "doughnut",
       data: {
@@ -542,60 +508,54 @@ function renderPies(p, rows) {
         },
       },
     });
-
-    $(`#${p}${k}Calc`).innerHTML = calc[k];
+    $(`#${p}${k}Calc`).innerHTML = `Actual ${title}: <b>${show(a)}</b> &nbsp;vs&nbsp; Commitment ${title}: <b>${show(c)}</b>`;
     $(`#${p}${k}Center`).innerHTML = has
       ? `<b class="bad">${show(slices[0].share)}</b><span>Actual</span><b class="warn small-b">${show(slices[1].share)}</b><span>Commitment</span><span class="pie-total">= 100%</span>`
-      : `<b class="bad">${show(actual[k])}</b><span>Actual</span><span>Commitment: ${com.n ? "–" : "koi entry nahi"}</span>`;
+      : `<b class="bad">${show(a)}</b><span>Actual</span><span>Commitment: ${show(c)}</span>`;
     $(`#${p}${k}Legend`).innerHTML = slices.map((s) =>
       `<li><i style="background:${s.color}"></i><span>${s.label}<small>value ${show(s.v)} · ${esc(s.sub)}</small></span><b>${show(s.share)}</b></li>`).join("")
       + (has ? `<li class="pie-sum"><span>Total (dono milake)</span><b>100%</b></li>` : "");
 
-    const v = $(`#${p}${k}Verdict`), a = actual[k], c = com.notDone;
+    const v = $(`#${p}${k}Verdict`);
     if (a === null || c === null) {
       v.className = "pie-verdict";
-      v.textContent = a === null ? "Actual nikalne ke liye data nahi hai." : "Is week range mein Commitment ke cells khaali hain.";
+      v.textContent = a === null ? `Is week range mein Actual ${title} ke cells abhi khaali hain. Monday ko apne aap bharenge.` : `Is week range mein Commitment ${title} ke cells khaali hain.`;
     } else {
       const gap = a - c; // plus = commitment se zyada kharab
       v.className = `pie-verdict ${gap > 0.5 ? "bad" : "good"}`;
-      v.textContent = gap > 0.5 ? `Actual commitment se ${pct(gap / 100, 1)} zyada hai.`
-        : gap < -0.5 ? `Actual commitment se ${pct(-gap / 100, 1)} kam hai. Commitment se behtar.`
-        : "Actual aur commitment barabar hain.";
+      v.textContent = gap > 0.5 ? `Actual ${title} commitment se ${pct(gap / 100, 1)} zyada hai.`
+        : gap < -0.5 ? `Actual ${title} commitment se ${pct(-gap / 100, 1)} kam hai. Commitment se behtar.`
+        : `Actual aur commitment ${title} barabar hain.`;
     }
-  }
 
-  // bar chart: Not done vs Commitment not done, Delay vs Commitment delay (bar ke upar % likha)
-  drawChart(`${p}Compare`, {
-    type: "bar",
-    data: {
-      labels: ["Not done vs Commitment not done", "Delay vs Commitment delay"],
-      datasets: [
-        { label: "Actual", data: bars.actual, backgroundColor: "#b4372f", borderRadius: 4, maxBarThickness: 80 },
-        { label: "Commitment", data: bars.commit, backgroundColor: "#c27c12", borderRadius: 4, maxBarThickness: 80 },
-      ],
-    },
-    options: {
-      layout: { padding: { top: 24 } },
-      scales: { y: { ticks: { callback: (v) => v + "%" } } },
-      plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${show(ctx.raw)}` } } },
-    },
-    plugins: [barLabels(show)],
-  });
+    // 2) do bar: Actual vs Commitment (bar ke upar % likha)
+    drawChart(`${p}Bar${k}`, {
+      type: "bar",
+      data: {
+        labels: [`Actual ${title}`, `Commitment ${title}`],
+        datasets: [{ label: title, data: [a, c], backgroundColor: [RED, AMBER], borderRadius: 4, maxBarThickness: 90 }],
+      },
+      options: {
+        layout: { padding: { top: 24 } },
+        scales: { y: { ticks: { callback: (x) => x + "%" } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${show(ctx.raw)}` } } },
+      },
+      plugins: [barLabels(show)],
+    });
 
-  // week-wise: har week ka Actual (Score, Monday ko bhara) vs us week ki Commitment
-  for (const [id, a, c] of [["WeekNotDone", "scoreNotDone", "commitNotDone"], ["WeekDelay", "scoreDelay", "commitDelay"]]) {
-    drawChart(`${p}${id}`, {
+    // 3) week-wise: har week ka Actual vs us week ki Commitment
+    drawChart(`${p}Week${k}`, {
       type: "bar",
       data: {
         labels: idx.map((i) => weeks[i].label),
         datasets: [
-          { label: "Actual", data: idx.map((i) => avgNotDone(use, a, [i]).notDone), backgroundColor: "#b4372f", borderRadius: 4, maxBarThickness: 48 },
-          { label: "Commitment", data: idx.map((i) => avgNotDone(use, c, [i]).notDone), backgroundColor: "#c27c12", borderRadius: 4, maxBarThickness: 48 },
+          { label: `Actual ${title}`, data: idx.map((i) => avgNotDone(use, ak, [i]).notDone), backgroundColor: RED, borderRadius: 4, maxBarThickness: 40 },
+          { label: `Commitment ${title}`, data: idx.map((i) => avgNotDone(use, ck, [i]).notDone), backgroundColor: AMBER, borderRadius: 4, maxBarThickness: 40 },
         ],
       },
       options: {
         layout: { padding: { top: 24 } },
-        scales: { y: { ticks: { callback: (v) => v + "%" } } },
+        scales: { y: { ticks: { callback: (x) => x + "%" } } },
         plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw === null ? "koi entry nahi" : show(ctx.raw)}` } } },
       },
       plugins: [barLabels(show)],
@@ -697,7 +657,8 @@ function renderSheetView() {
   const rows = sheetRows();
   state.visibleRows = rows;
   const weeks = d.weeks;
-  const fixed = d.displayCols;
+  // ek employee chuna hai to Team column mein wahi naam baar baar aata, isliye hata do
+  const fixed = state.selectedEmp === "__ALL__" ? d.displayCols : d.displayCols.filter(({ c }) => c !== d.cols.team);
 
   $("#sheetCount").textContent =
     `${rows.length} rows${state.selectedEmp !== "__ALL__" ? ` · ${state.selectedEmp}` : ""}` +
@@ -1130,12 +1091,7 @@ function bind() {
   $("#sheetSearch").addEventListener("input", renderSheetView);
 
   $("#refreshBtn").addEventListener("click", () => { state.signature = ""; load(); });
-  $("#empSearch").addEventListener("input", renderRoster);
-  $("#empSort").addEventListener("change", renderRoster);
-  $(".roster").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-emp]");
-    if (b) selectEmployee(b.dataset.emp);
-  });
+  $("#empSelect").addEventListener("change", (e) => selectEmployee(e.target.value));
   $("#worstList").addEventListener("click", (e) => {
     const li = e.target.closest("[data-emp]");
     if (li) selectEmployee(li.dataset.emp);

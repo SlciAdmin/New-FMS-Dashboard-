@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=202610271" />
+  <link rel="stylesheet" href="style.css?v=202610273" />
 </head>
 <body>
   <!-- Top bar -->
@@ -25,6 +25,9 @@
         <option value="3">Last 3 months</option>
         <option value="all">All weeks</option>
       </select>
+      <select id="empSelect" aria-label="Employee">
+        <option value="__ALL__">All employees</option>
+      </select>
     </div>
 
     <div class="sync">
@@ -35,24 +38,6 @@
   </header>
 
   <div class="layout">
-    <!-- Employee roster -->
-    <aside class="roster">
-      <div class="roster-head">
-        <input id="empSearch" type="search" placeholder="Search employee" aria-label="Search employee" />
-        <select id="empSort" aria-label="Sort employees">
-          <option value="name">Sort: Name</option>
-          <option value="completion">Sort: Completion</option>
-          <option value="delay">Sort: Delay</option>
-          <option value="planned">Sort: Planned tasks</option>
-        </select>
-      </div>
-      <button class="roster-item all" data-emp="__ALL__">
-        <span class="r-name">All employees</span>
-        <span class="r-meta" id="allMeta"></span>
-      </button>
-      <div id="rosterList" class="roster-list"></div>
-    </aside>
-
     <!-- Main -->
     <main class="main">
       <nav class="tabs" role="tablist">
@@ -147,6 +132,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="script.js?v=202610271"></script>
+  <script src="script.js?v=202610273"></script>
 </body>
 </html>
