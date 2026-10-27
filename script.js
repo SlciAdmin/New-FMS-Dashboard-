@@ -32,7 +32,8 @@ const state = {
   saveAgain: false,       // save chalte waqt aur values aayi: khatam hote hi dobara bhejo
   saveTimer: null,
   reloadTimer: null,
-  noBatch: false,         // Code.gs purana deploy hai (batch "values" action nahi hai)
+  noBatch: false,
+  sheetToEnd: true,       // sheet table ko latest week (right side) tak scroll karna hai         // Code.gs purana deploy hai (batch "values" action nahi hai)
 };
 
 const $ = (s) => document.querySelector(s);
@@ -644,7 +645,19 @@ function renderSheetView() {
     <thead><tr>${head1}</tr><tr>${head2}</tr><tr>${head3}</tr></thead>
     <tbody>${body || `<tr><td class="muted" colspan="20">Koi row nahi mili.</td></tr>`}</tbody>`;
   freezeFixedCols();
+  syncHScroll();
   renderSheetHist();
+}
+
+// neeche wala scrollbar (screen ke bottom par chipka rehta hai) table ki chaudai ke saath milao;
+// naya employee / range / sheet chuna ho to latest week (right side) tak le jao, 60 sec refresh par jagah wahi rahe
+function syncHScroll() {
+  const w = $(".sheet-wrap"), bar = $("#sheetHScroll");
+  if (!w.offsetWidth) return; // tab chhupa hai, dikhne par switchView dobara bulata hai
+  bar.firstElementChild.style.width = w.scrollWidth + "px";
+  bar.style.marginRight = w.offsetWidth - w.clientWidth + "px";
+  if (state.sheetToEnd) { w.scrollLeft = w.scrollWidth; state.sheetToEnd = false; }
+  bar.scrollLeft = w.scrollLeft;
 }
 
 /* ---- sheet view ke upar bhi wahi do pie (Employee report jaise), upar chune employee ke hisaab se ---- */
@@ -1016,6 +1029,7 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.ad
 
 function selectEmployee(name) {
   state.selectedEmp = name;
+  state.sheetToEnd = true;
   renderRoster();
   renderSheetView();
   if (state.view === "sheet") return;        // sheet view mein sirf filter
@@ -1029,7 +1043,7 @@ function switchView(v) {
   $$(".view").forEach((s) => s.classList.toggle("active", s.id === `view-${v}`));
   if (v === "overview" && state.data) renderOverview();
   if (v === "employee" && state.data) renderEmployee();
-  if (v === "sheet") { freezeFixedCols(); if (state.data) renderSheetHist(); }
+  if (v === "sheet") { freezeFixedCols(); syncHScroll(); if (state.data) renderSheetHist(); }
   Object.values(state.charts).forEach((c) => c.resize());
 }
 
@@ -1038,11 +1052,12 @@ function bind() {
   $("#sheetSelect").addEventListener("change", (e) => {
     state.sheet = e.target.value;
     store.set("mis_sheet", state.sheet);
-    state.signature = ""; state.selectedEmp = "__ALL__";
+    state.signature = ""; state.selectedEmp = "__ALL__"; state.sheetToEnd = true;
     load();
   });
   $("#weekRange").value = store.get("mis_weeks") || CONFIG.DEFAULT_WEEK_RANGE;
   $("#weekRange").addEventListener("change", (e) => {
+    state.sheetToEnd = true;
     store.set("mis_weeks", e.target.value);
     renderSheetView();
     renderOverview();
@@ -1073,7 +1088,11 @@ function bind() {
   }
   $("#saveBtn").addEventListener("mousedown", (e) => e.preventDefault()); // input blur pehle ho jaaye, click na khoye
   $("#saveBtn").addEventListener("click", () => { document.activeElement?.blur?.(); saveEdits(true); });
-  window.addEventListener("resize", freezeFixedCols);
+  window.addEventListener("resize", () => { freezeFixedCols(); syncHScroll(); });
+  // neeche ka scrollbar aur table ek saath chalein
+  const wrap = $(".sheet-wrap"), hbar = $("#sheetHScroll");
+  hbar.addEventListener("scroll", () => { if (wrap.scrollLeft !== hbar.scrollLeft) wrap.scrollLeft = hbar.scrollLeft; });
+  wrap.addEventListener("scroll", () => { if (hbar.scrollLeft !== wrap.scrollLeft) hbar.scrollLeft = wrap.scrollLeft; });
   window.addEventListener("beforeunload", (e) => { if (state.edits.size) { e.preventDefault(); e.returnValue = ""; } });
 
   document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ silent: true }); });
