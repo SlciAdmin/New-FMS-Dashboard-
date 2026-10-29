@@ -58,7 +58,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   border-image: linear-gradient(90deg, var(--brand-green), var(--brand-teal)) 1;
 }
 .filter { display: grid; gap: 4px; }
-.filter span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.filter > span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .filter select {
   min-width: 170px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm);
   background: var(--surface); font-weight: 600; cursor: pointer;
@@ -512,8 +512,8 @@ body {
   content: ""; position: absolute; left: 16px; right: 16px; top: 0; height: 3px; border-radius: 0 0 3px 3px;
   background: linear-gradient(90deg, var(--brand-green), var(--brand-teal));
 }
-.filter span { display: inline-flex; align-items: center; gap: 6px; color: #3d6b62; }
-.filter span svg { width: 14px; height: 14px; color: var(--accent); }
+.filter > span { display: inline-flex; align-items: center; gap: 6px; color: #3d6b62; }
+.filter > span svg { width: 14px; height: 14px; color: var(--accent); }
 .filter select { border-radius: 10px; background-color: #f7fbf9; }
 .main { padding-top: 24px; }
 
@@ -583,3 +583,34 @@ body {
 /* "Highest not-done gap" list mein bhi halka hover */
 .rank li { border-radius: 8px; padding-left: 6px; padding-right: 6px; transition: background .15s; }
 .rank li:hover { background: rgba(47,158,79,.06); }
+
+/* ================= employee search dropdown ================= */
+.combo { position: relative; min-width: 320px; }
+.combo input {
+  width: 100%; padding: 8px 40px 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: #f7fbf9; font-weight: 600; cursor: text;
+}
+.combo input:hover { border-color: var(--accent); }
+.combo input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); background: #fff; font-weight: 500; }
+.combo-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 32px; height: 30px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--accent); cursor: pointer;
+}
+.combo-toggle:hover { background: var(--accent-soft); }
+.combo-toggle svg { width: 18px; height: 18px; }
+.combo-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40;
+  max-height: 340px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+  background: #fff; border: 1px solid #dbe7e3; border-radius: 12px; box-shadow: 0 16px 36px rgba(8,45,42,.18);
+}
+.combo-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; font-weight: 500;
+}
+.combo-list li small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.combo-list li.active { background: var(--accent-soft); }
+.combo-list li.sel { color: var(--accent); font-weight: 700; }
+.combo-list li.sel::after { content: "✓"; margin-left: 6px; color: var(--accent); }
+.combo-list li.none { color: var(--muted); cursor: default; justify-content: center; }
+.combo-list mark { background: #fbe9a8; color: inherit; border-radius: 3px; padding: 0 1px; }

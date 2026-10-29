@@ -294,13 +294,40 @@ function kpiHTML(items) {
 }
 
 /* ---- employee dropdown (upar, sheet wali dropdown ke paas) ---- */
+// employee search: list khulti hai, naam type karo to sirf milte naam bachte hain
 function renderRoster() {
   const d = state.data, t = d.totals;
   const list = [...d.employees].sort((a, b) => a.name.localeCompare(b.name));
-  const sel = $("#empSelect");
-  sel.innerHTML = `<option value="__ALL__">All employees (${list.length}) · ${pct(t.completion)} done</option>` +
-    list.map((e) => `<option value="${esc(e.name)}">${esc(e.name)} · ${pct(e.completion)} done</option>`).join("");
-  sel.value = state.selectedEmp;
+  state.empOptions = [
+    { value: "__ALL__", label: `All employees (${list.length})`, meta: `${pct(t.completion)} done` },
+    ...list.map((e) => ({ value: e.name, label: e.name, meta: `${pct(e.completion)} done` })),
+  ];
+  const inp = $("#empSearch");
+  if (document.activeElement !== inp) inp.value = empLabel();
+  if (!$("#empList").hidden) renderEmpList();
+}
+
+const empLabel = () => {
+  const o = (state.empOptions || []).find((x) => x.value === state.selectedEmp);
+  return o ? `${o.label} · ${o.meta}` : "";
+};
+
+// list banao: type kiya hai to sirf milte naam, mila hua hissa highlight
+function renderEmpList() {
+  const q = state.empFiltering ? $("#empSearch").value.trim().toLowerCase() : "";
+  const items = (state.empOptions || []).filter((o) => !q || o.label.toLowerCase().includes(q));
+  state.empItems = items;
+  state.empActive = Math.max(0, Math.min(state.empActive || 0, items.length - 1));
+  const mark = (s) => {
+    const i = q ? s.toLowerCase().indexOf(q) : -1;
+    return i < 0 ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>" + esc(s.slice(i + q.length));
+  };
+  $("#empList").innerHTML = items.length
+    ? items.map((o, i) => `<li role="option" data-v="${esc(o.value)}" class="${i === state.empActive ? "active" : ""}${o.value === state.selectedEmp ? " sel" : ""}"
+        aria-selected="${o.value === state.selectedEmp}"><span>${mark(o.label)}</span><small>${o.meta}</small></li>`).join("")
+    : `<li class="none">"${esc(q)}" naam ka koi employee nahi mila</li>`;
+  const act = $("#empList li.active");
+  if (act) act.scrollIntoView({ block: "nearest" });
 }
 
 function empNoteCount(e) {
@@ -1069,7 +1096,39 @@ function bind() {
 
   $("#year").textContent = new Date().getFullYear();
   $("#refreshBtn").addEventListener("click", () => { state.signature = ""; load(); });
-  $("#empSelect").addEventListener("change", (e) => selectEmployee(e.target.value));
+  // employee search box
+  const empInp = $("#empSearch"), empList = $("#empList");
+  const openEmp = (filter) => {
+    state.empFiltering = filter; state.empActive = 0;
+    empList.hidden = false; empInp.setAttribute("aria-expanded", "true");
+    renderEmpList();
+  };
+  const closeEmp = () => { empList.hidden = true; empInp.setAttribute("aria-expanded", "false"); empInp.value = empLabel(); };
+  const pickEmp = (v) => { closeEmp(); empInp.blur(); if (v !== state.selectedEmp) selectEmployee(v); empInp.value = empLabel(); };
+  empInp.addEventListener("focus", () => { empInp.select(); openEmp(false); });
+  empInp.addEventListener("input", () => openEmp(true));
+  empInp.addEventListener("blur", closeEmp);
+  empInp.addEventListener("keydown", (e) => {
+    if (empList.hidden && (e.key === "ArrowDown" || e.key === "Enter")) { e.preventDefault(); openEmp(false); return; }
+    const n = (state.empItems || []).length;
+    if (e.key === "ArrowDown") state.empActive = Math.min(n - 1, state.empActive + 1);
+    else if (e.key === "ArrowUp") state.empActive = Math.max(0, state.empActive - 1);
+    else if (e.key === "Enter") { e.preventDefault(); const o = state.empItems[state.empActive]; if (o) pickEmp(o.value); return; }
+    else if (e.key === "Escape") { empInp.blur(); return; }
+    else return;
+    e.preventDefault();
+    renderEmpList();
+  });
+  // mousedown par focus input se na hate, tabhi click se naam chuna jaaye
+  empList.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const li = e.target.closest("li[data-v]");
+    if (li) pickEmp(li.dataset.v);
+  });
+  $("#empToggle").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    if (empList.hidden) empInp.focus(); else empInp.blur();
+  });
   $("#worstList").addEventListener("click", (e) => {
     const li = e.target.closest("[data-emp]");
     if (li) selectEmployee(li.dataset.emp);
