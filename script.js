@@ -1105,7 +1105,7 @@ function bind() {
   };
   const closeEmp = () => { empList.hidden = true; empInp.setAttribute("aria-expanded", "false"); empInp.value = empLabel(); };
   const pickEmp = (v) => { closeEmp(); empInp.blur(); if (v !== state.selectedEmp) selectEmployee(v); empInp.value = empLabel(); };
-  empInp.addEventListener("focus", () => { empInp.select(); openEmp(false); });
+  empInp.addEventListener("focus", () => { empInp.value = ""; openEmp(false); }); // click karte hi khaali box: seedha naam type karo
   empInp.addEventListener("input", () => openEmp(true));
   empInp.addEventListener("blur", closeEmp);
   empInp.addEventListener("keydown", (e) => {
