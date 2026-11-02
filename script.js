@@ -218,6 +218,11 @@ function parseGrid(grid, notesList = [], meta = {}) {
         scoreNotDone: num(g[w.col]), scoreDelay: num(g[w.col + 1]),
         commitNotDone: num(g[w.col + 2]), commitDelay: num(g[w.col + 3]),
       })),
+      // sheet mein jaisa dikhta hai waisa hi text ("-100%", "-150%"), taaki dashboard par bhi same dikhe
+      weeklyText: weeks.map((w) => ({
+        scoreNotDone: clean(g[w.col]), scoreDelay: clean(g[w.col + 1]),
+        commitNotDone: clean(g[w.col + 2]), commitDelay: clean(g[w.col + 3]),
+      })),
     };
     row.raw[cols.team] = team;
     rows.push(row);
@@ -454,7 +459,7 @@ function renderWeekly(e) {
       <tr>${head3}</tr>
     </thead>
     <tbody>${rows.map((r) => `<tr><th class="area">${esc(r.area)}</th>${idx.map((i) => METRICS.map((m) => {
-      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], m.off === 3 ? "wk-end" : "");
+      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], m.off === 3 ? "wk-end" : "", r.weeklyText[i][m.k]);
     }).join("")).join("")}</tr>`).join("")}</tbody>`;
 }
 
@@ -614,16 +619,16 @@ function sheetCell(r, c, value, extra = "") {
 }
 
 /* ---- ek weekly (Score / Commitment) cell: click karke value likho ---- */
-const origValue = (v) => (v === null ? "" : fmtWeekVal(v).replace(/,/g, ""));
+const origValue = (v, text = "") => (v === null ? "" : (text || fmtWeekVal(v)).replace(/,/g, ""));
 
-function weekCell(r, c, v, extra = "") {
+function weekCell(r, c, v, extra = "", text = "") {
   const edit = state.edits.get(`${r.gridRow}:${c}`);
   const note = noteAt(r.gridRow, c);
-  const shown = edit ? edit.value : origValue(v);
+  const shown = edit ? edit.value : origValue(v, text);
   const n = edit ? num(edit.value) : v;
   const cls = [n === null ? "" : n === 0 ? "ok" : "bad", note ? "has-note" : "", edit ? "edited" : "", edit && edit.sending ? "sending" : "", edit && edit.error ? "err" : "", "editable", extra].join(" ");
   const title = edit && edit.error ? edit.error : edit ? "Sheet mein save ho raha hai…" : note || "Click karke value likho";
-  return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" data-orig="${esc(origValue(v))}" tabindex="0" title="${esc(title)}">${esc(shown)}</td>`;
+  return `<td class="${cls}" data-r="${r.gridRow}" data-c="${c}" data-orig="${esc(origValue(v, text))}" tabindex="0" title="${esc(title)}">${esc(shown)}</td>`;
 }
 
 /* ---- sheet view (Google Sheet jaisa) ---- */
@@ -663,7 +668,7 @@ function renderSheetView() {
     prevTeam = r.team;
     const cells = fixed.map(({ c }, k) => sheetCell(r, c, c === d.cols.team ? (first ? r.team : "") : r.raw[c], fxCls(k))).join("");
     const wk = idx.map((i) => METRICS.map((m) => {
-      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], (m.off === 3 ? "wk-end " : "") + "wcell");
+      return weekCell(r, weeks[i].col + m.off, r.weekly[i][m.k], (m.off === 3 ? "wk-end " : "") + "wcell", r.weeklyText[i][m.k]);
     }).join("")).join("");
     return `<tr class="${first ? "grp" : ""}">${cells}${wk}</tr>`;
   }).join("");
@@ -721,7 +726,7 @@ function downloadCSV() {
   const wkHead = idx.flatMap((i) => METRICS.map((m) => `${d.weeks[i].label} ${m.label}`));
   const csv = [
     [...d.fixedHeaders, ...wkHead].map(q).join(","),
-    ...rows.map((r) => [...r.raw, ...idx.flatMap((i) => METRICS.map((m) => r.weekly[i][m.k] ?? ""))].map(q).join(",")),
+    ...rows.map((r) => [...r.raw, ...idx.flatMap((i) => METRICS.map((m) => (r.weekly[i][m.k] === null ? "" : r.weeklyText[i][m.k])))].map(q).join(",")),
   ].join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -992,6 +997,7 @@ function applySaved(d) {
     const want = num(s.value);
     if (row.weekly[wi][k] === want || Date.now() - s.at > 120000) { state.saved.delete(key); continue; }
     row.weekly[wi][k] = want;
+    row.weeklyText[wi][k] = s.value;
   }
 }
 
