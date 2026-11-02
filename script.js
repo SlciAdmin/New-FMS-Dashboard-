@@ -13,7 +13,8 @@ const CONFIG = {
 /* ---------- state ---------- */
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  remove(k) { try { localStorage.removeItem(k); } catch {} },
 };
 const state = {
   sheet: store.get("mis_sheet") || CONFIG.DEFAULT_SHEET,
@@ -24,7 +25,10 @@ const state = {
   sort: { col: null, dir: 1 },
   charts: {},
   timer: null,
-  loading: false,
+  loading: false,         // jis sheet ka load chal raha hai (naam), warna false
+  cache: {},              // sheet naam -> aakhri "get" response
+  fresh: new Set(),       // is visit mein jin sheets ka data sheet se aa chuka hai
+  prefetching: false,
   edits: new Map(),       // "r:c" -> { r, c, area, value } (abhi save nahi hue)
   saving: false,
   saved: new Map(),       // "r:c" -> { r, c, value, at } (save ho gaye, sheet se confirm hone tak)
@@ -1005,41 +1009,88 @@ function applySaved(d) {
    5. LOAD + AUTO REFRESH
    ===================================================================== */
 
+// har tab ka aakhri data (memory + browser mein), taaki tab badalte hi turant dikhe; naya data peeche se aata hai
+const cacheKey = (sheet) => `mis_cache_${sheet}`;
+function cachedSheet(sheet) {
+  if (!state.cache[sheet]) {
+    try { state.cache[sheet] = JSON.parse(store.get(cacheKey(sheet))) || undefined; } catch {}
+  }
+  return state.cache[sheet];
+}
+async function fetchSheet(sheet) {
+  const res = await callScript({ action: "get", sheet });
+  state.cache[sheet] = res;
+  state.fresh.add(sheet);
+  if (!store.set(cacheKey(sheet), JSON.stringify(res))) store.remove(cacheKey(sheet)); // jagah na ho to purana mat rakho
+  return res;
+}
+
+// chuni hui sheet ka data dikhao (pehle jaisa hi ho to kuch nahi)
+function showData(res, silent) {
+  const sig = hash(JSON.stringify([res.values, res.notes]));
+  const changed = state.signature && sig !== state.signature;
+  if (sig === state.signature) return;
+  state.data = parseGrid(res.values || [], res.notes || [], { hiddenCols: res.hiddenCols, teamMerges: res.teamMerges });
+  applySaved(state.data);
+  state.signature = state.saved.size ? "" : sig; // abhi confirm nahi hua to agli baar bhi dobara parse
+  if (!state.data.rows.length) {
+    showError(`"${state.sheet}" tab mein Team / Result in area ke neeche koi data nahi mila. Upar dropdown se doosra tab chuno.`);
+  } else hideError();
+  if (state.selectedEmp !== "__ALL__" && !state.data.employees.some((e) => e.name === state.selectedEmp)) {
+    state.selectedEmp = "__ALL__";
+  }
+  renderAll();
+  if (changed && silent) {
+    toast("Sheet updated. Dashboard refreshed.");
+    $(".main").classList.add("flash");
+    setTimeout(() => $(".main").classList.remove("flash"), 1600);
+  }
+}
+
+// state.loading = jis sheet ka load chal raha hai; doosri sheet chuni to uska load turant shuru (rukta nahi)
 async function load({ silent = false } = {}) {
-  if (state.loading) return;
+  const sheet = state.sheet;
+  if (state.loading === sheet) return;
   if (silent && (state.saving || document.activeElement?.classList.contains("cell-in"))) return;
-  state.loading = true;
+  state.loading = sheet;
   setSync("loading", silent ? "Checking sheet for changes…" : "Loading sheet… (5-10 sec)");
   try {
-    const res = await callScript({ action: "get", sheet: state.sheet });
-    const sig = hash(JSON.stringify([res.values, res.notes]));
-    const changed = state.signature && sig !== state.signature;
-    if (sig !== state.signature) {
-      state.data = parseGrid(res.values || [], res.notes || [], { hiddenCols: res.hiddenCols, teamMerges: res.teamMerges });
-      applySaved(state.data);
-      state.signature = state.saved.size ? "" : sig; // abhi confirm nahi hua to agli baar bhi dobara parse
-      if (!state.data.rows.length) {
-        showError(`"${state.sheet}" tab mein Team / Result in area ke neeche koi data nahi mila. Upar dropdown se doosra tab chuno.`);
-      } else hideError();
-      if (state.selectedEmp !== "__ALL__" && !state.data.employees.some((e) => e.name === state.selectedEmp)) {
-        state.selectedEmp = "__ALL__";
-      }
-      renderAll();
-      if (changed && silent) {
-        toast("Sheet updated. Dashboard refreshed.");
-        $(".main").classList.add("flash");
-        setTimeout(() => $(".main").classList.remove("flash"), 1600);
-      }
-    }
+    const res = await fetchSheet(sheet);
+    if (sheet !== state.sheet) return; // beech mein tab badal gaya: ye data bas cache mein rahega
+    showData(res, silent);
     setSync("live", `Live · synced ${new Date().toLocaleTimeString("en-IN")} · every ${CONFIG.REFRESH_SECONDS}s`);
   } catch (err) {
     console.error(err);
+    if (sheet !== state.sheet) return;
     setSync("error", "Sync failed");
     showError(err.message);
   } finally {
-    state.loading = false;
-    if (state.reloadAfter) { state.reloadAfter = false; load({ silent: true }); }
+    if (state.loading === sheet) state.loading = false;
+    if (sheet === state.sheet) {
+      if (state.reloadAfter) { state.reloadAfter = false; load({ silent: true }); }
+      prefetchSheets();
+    }
   }
+}
+
+// baaki tabs ka data peeche se ek-ek karke laa ke rakho, taaki unhe chunte hi turant dikhe
+async function prefetchSheets() {
+  if (state.prefetching) return;
+  state.prefetching = true;
+  try {
+    for (const o of $$("#sheetSelect option")) {
+      const s = o.value;
+      if (s === state.sheet || state.fresh.has(s)) continue;
+      try { await fetchSheet(s); } catch (e) { console.warn("prefetch failed", s, e); }
+    }
+  } finally { state.prefetching = false; }
+}
+
+// tab badla: cache wala data turant, phir sheet se naya
+function openSheetTab() {
+  const c = cachedSheet(state.sheet);
+  if (c) showData(c, false);
+  load({ silent: !!c });
 }
 
 function hash(s) {
@@ -1086,7 +1137,7 @@ function bind() {
     state.sheet = e.target.value;
     store.set("mis_sheet", state.sheet);
     state.signature = ""; state.selectedEmp = "__ALL__"; state.sheetToEnd = true;
-    load();
+    openSheetTab();
   });
   $("#weekRange").value = store.get("mis_weeks") || CONFIG.DEFAULT_WEEK_RANGE;
   $("#weekRange").addEventListener("change", (e) => {
@@ -1167,6 +1218,6 @@ if (typeof module !== "undefined") module.exports = { parseGrid, parseDate };
 
 if (typeof document !== "undefined") {
   bind();
-  load();
+  openSheetTab();
   startTimer();
 }
