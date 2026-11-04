@@ -471,17 +471,22 @@ const fmtWeekVal = (v) => (Math.abs(v) < 1 && v !== 0 ? pct(v) : fmt(v));
 
 /* ---- pie charts: Not done aur Delay, Actual vs Commitment ---- */
 // weekly cell ko "kitna % not done" (0-100) mein: "-20" aur "-20%" dono = 20; plus wali value = 0
-function notDoneOf(v) {
+// weekly cell ki value sheet jaisi % mein: "-100%" = -100, "-20%" = -20, "-12" = -12 (num() "-100%" ko -1 deta hai)
+function pctOf(v, text = "") {
   if (v === null) return null;
-  const p = Math.abs(v) < 1 ? v * 100 : v; // "-20%" num() se -0.2 aata hai
-  return Math.min(100, Math.max(0, -p));
+  return /%$/.test(text) || Math.abs(v) < 1 ? v * 100 : v;
+}
+
+function notDoneOf(v, text = "") {
+  if (v === null) return null;
+  return Math.min(100, Math.max(0, -pctOf(v, text)));
 }
 
 // chune hue weeks mein jitne cells bhare hain unka average not-done %
 function avgNotDone(rows, k, idx = visibleWeeks()) {
   const vals = [];
   for (const r of rows) for (const i of idx) {
-    const x = notDoneOf(r.weekly[i][k]);
+    const x = notDoneOf(r.weekly[i][k], r.weeklyText[i][k]);
     if (x !== null) vals.push(x);
   }
   return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
@@ -696,10 +701,109 @@ function syncHScroll() {
   bar.scrollLeft = w.scrollLeft;
 }
 
-/* ---- sheet view ke upar bhi wahi do pie (Employee report jaise), upar chune employee ke hisaab se ---- */
+/* ---- sheet view ke upar: ek graph, Y = Result in area, Planned (D, hara) vs Actual (E, laal), upar chune employee ke hisaab se ---- */
 function renderSheetHist() {
+  // graph sirf ek employee chunne par; All employees par poora panel chhupa
+  const all = state.selectedEmp === "__ALL__";
+  $("#shPlan").closest(".panel").hidden = all;
+  if (all) return;
   const rows = state.data.rows.filter((r) => r.team && (state.selectedEmp === "__ALL__" || r.team === state.selectedEmp));
-  renderPies("sh", rows);
+  renderPlanActual(rows);
+}
+
+const doneShare = (plan, act) => (plan ? (act / plan) * 100 : null);
+
+// har patti ke upar uski value likho
+const pointLabels = {
+  id: "pointLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const [plan, act] = chart.data.datasets.map((ds) => ds.data);
+    ctx.save();
+    ctx.font = "700 11px Figtree, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((pt, i) => {
+        ctx.fillStyle = ds.borderColor;
+        ctx.fillText(fmt((di === 0 ? plan : act)[i]), pt.x, pt.y - 3);
+      });
+    });
+    ctx.restore();
+  },
+};
+
+function renderPlanActual(rows) {
+  const box = $("#shPlan");
+  if (!box.children.length) {
+    box.innerHTML = `
+      <div class="pie">
+        <p class="pie-calc" id="shPlanCalc"></p>
+        <div class="pa-scroll"><div class="line-chart pa-chart" id="shPlanWrap"><canvas id="shPlanChart"></canvas></div></div>
+        <p class="pie-verdict" id="shPlanVerdict"></p>
+      </div>`;
+  }
+
+  // ek Result in area ki ek line: sab employees chune hon to us area ke sabke Planned / Actual jod ke
+  const byArea = new Map();
+  for (const r of rows) {
+    if (!(r.planned > 0)) continue;
+    const a = byArea.get(r.area) || { area: r.area, plan: 0, act: 0 };
+    a.plan += r.planned; a.act += r.actualDone || 0;
+    byArea.set(r.area, a);
+  }
+  const pts = [...byArea.values()];
+  const who = state.selectedEmp === "__ALL__" ? "All employees" : state.selectedEmp;
+  const show = (v) => (v === null ? "–" : `${+v.toFixed(1)}%`);
+  const GREEN = "#2f9e4f", RED = "#b4372f"; // Planned hara, Actual laal
+
+  const totPlan = pts.reduce((s, p) => s + p.plan, 0), totAct = pts.reduce((s, p) => s + p.act, 0);
+  const totShare = doneShare(totPlan, totAct);
+  $("#shPieInfo").textContent = `${who} · ${pts.length} result in area`;
+  $("#shPlanCalc").innerHTML = `Planned: <b class="plan">${fmt(totPlan)}</b> &nbsp;vs&nbsp; Actual: <b class="act">${fmt(totAct)}</b> &nbsp;·&nbsp; Actual = <b>${show(totShare)}</b> of planned`;
+
+  // ek hi screen mein: khade bar, neeche area ke naam; bahut saare area hon (All employees) tabhi side mein scroll
+  $("#shPlanWrap").style.width = `max(100%, ${pts.length * 46}px)`;
+  const short = (a) => (a.length > 18 ? a.slice(0, 17) + "…" : a);
+  drawChart("shPlanChart", {
+    type: "bar",
+    data: {
+      labels: pts.map((p) => [short(p.area), show(doneShare(p.plan, p.act))]), // naam ke neeche Actual %
+      datasets: [
+        { label: "Planned", data: pts.map((p) => p.plan), borderColor: GREEN, backgroundColor: GREEN, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
+        { label: "Actual", data: pts.map((p) => p.act), borderColor: RED, backgroundColor: RED, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
+      ],
+    },
+    options: {
+      layout: { padding: { top: 16 } },
+      plugins: {
+        legend: { position: "top" },
+        tooltip: { callbacks: { title: (items) => pts[items[0].dataIndex].area, label: (ctx) => {
+          const p = pts[ctx.dataIndex];
+          return ctx.datasetIndex === 0 ? `Planned: ${fmt(p.plan)}` : `Actual: ${fmt(p.act)} (${show(doneShare(p.plan, p.act))})`;
+        } } },
+      },
+      scales: {
+        x: { title: { display: true, text: "Result in area (neeche Actual %)" }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 11, weight: "600" } } },
+        y: { beginAtZero: true, grace: "8%", title: { display: true, text: "Planned / Actual" }, grid: { color: "#eef1f5" } },
+      },
+    },
+    plugins: [pointLabels],
+  });
+
+  const v = $("#shPlanVerdict");
+  if (!pts.length) {
+    v.className = "pie-verdict";
+    v.textContent = `${who} ka koi Result in area planned nahi hai.`;
+  } else {
+    const less = pts.filter((p) => p.act < p.plan).length;
+    v.className = `pie-verdict ${totAct < totPlan ? "bad" : "good"}`;
+    v.textContent = totAct < totPlan
+      ? `${who}: ${fmt(totPlan)} planned mein se ${fmt(totAct)} actual (${show(totShare)}). ${fmt(totPlan - totAct)} baaki, ${less} result in area mein planned se kam.`
+      : `${who}: saara planned kaam pura (${fmt(totAct)} / ${fmt(totPlan)}).`;
+  }
 }
 
 function freezeFixedCols() {

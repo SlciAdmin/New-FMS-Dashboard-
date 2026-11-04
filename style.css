@@ -614,3 +614,10 @@ body {
 .combo-list li.sel::after { content: "✓"; margin-left: 6px; color: var(--accent); }
 .combo-list li.none { color: var(--muted); cursor: default; justify-content: center; }
 .combo-list mark { background: #fbe9a8; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* ---------- sheet view: Planned vs Actual graph ---------- */
+.line-chart { position: relative; height: 300px; }
+.pie-calc b.plan { color: #2f9e4f; font-weight: 700; }
+.pie-calc b.act { color: var(--bad); font-weight: 700; }
+.pa-scroll { overflow-x: auto; }
+.pa-chart { height: 440px; min-width: 100%; }
