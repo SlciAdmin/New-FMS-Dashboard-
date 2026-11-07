@@ -765,12 +765,21 @@ function renderPlanActual(rows) {
   $("#shPlanCalc").innerHTML = `Planned: <b class="plan">${fmt(totPlan)}</b> &nbsp;vs&nbsp; Actual: <b class="act">${fmt(totAct)}</b> &nbsp;·&nbsp; Actual = <b>${show(totShare)}</b> of planned`;
 
   // ek hi screen mein: khade bar, neeche area ke naam; bahut saare area hon (All employees) tabhi side mein scroll
-  $("#shPlanWrap").style.width = `max(100%, ${pts.length * 46}px)`;
-  const short = (a) => (a.length > 18 ? a.slice(0, 17) + "…" : a);
+  $("#shPlanWrap").style.width = `max(100%, ${pts.length * 92}px)`;
+  // poora naam, kaata nahi; lamba ho to shabdon ke hisaab se 2-3 line mein
+  const wrap = (a) => {
+    const lines = [];
+    for (const w of String(a).split(/\s+/)) {
+      const last = lines[lines.length - 1];
+      if (last && (last + " " + w).length <= 14) lines[lines.length - 1] = last + " " + w;
+      else lines.push(w);
+    }
+    return lines;
+  };
   drawChart("shPlanChart", {
     type: "bar",
     data: {
-      labels: pts.map((p) => [short(p.area), show(doneShare(p.plan, p.act))]), // naam ke neeche Actual %
+      labels: pts.map((p) => wrap(p.area)), // sirf task ka poora naam
       datasets: [
         { label: "Planned", data: pts.map((p) => p.plan), borderColor: GREEN, backgroundColor: GREEN, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
         { label: "Actual", data: pts.map((p) => p.act), borderColor: RED, backgroundColor: RED, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
@@ -786,7 +795,7 @@ function renderPlanActual(rows) {
         } } },
       },
       scales: {
-        x: { title: { display: true, text: "Result in area (neeche Actual %)" }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 11, weight: "600" } } },
+        x: { title: { display: true, text: "Result in area" }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 11, weight: "600" } } },
         y: { beginAtZero: true, grace: "8%", title: { display: true, text: "Planned / Actual" }, grid: { color: "#eef1f5" } },
       },
     },
