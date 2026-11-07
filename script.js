@@ -761,6 +761,11 @@ function renderPlanActual(rows) {
 
   const totPlan = pts.reduce((s, p) => s + p.plan, 0), totAct = pts.reduce((s, p) => s + p.act, 0);
   const totShare = doneShare(totPlan, totAct);
+  // graph ke neeche date: sheet ke pehle week se aakhri week tak (Planned / Actual poori sheet ka total hai)
+  const dated = state.data.weeks.filter((w) => w.date);
+  const dateText = dated.length
+    ? `Date: ${dated[0].label}${dated.length > 1 ? ` – ${dated[dated.length - 1].label}` : ""}`
+    : `Date: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}`;
   $("#shPieInfo").textContent = `${who} · ${pts.length} result in area`;
   $("#shPlanCalc").innerHTML = `Planned: <b class="plan">${fmt(totPlan)}</b> &nbsp;vs&nbsp; Actual: <b class="act">${fmt(totAct)}</b> &nbsp;·&nbsp; Actual = <b>${show(totShare)}</b> of planned`;
 
@@ -795,7 +800,7 @@ function renderPlanActual(rows) {
         } } },
       },
       scales: {
-        x: { title: { display: true, text: "Result in area" }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 11, weight: "600" } } },
+        x: { title: { display: true, text: ["Result in area", dateText], font: { weight: "600" } }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 11, weight: "600" } } },
         y: { beginAtZero: true, grace: "8%", title: { display: true, text: "Planned / Actual" }, grid: { color: "#eef1f5" } },
       },
     },
