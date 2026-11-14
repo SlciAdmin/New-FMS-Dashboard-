@@ -70,10 +70,6 @@
       <!-- OVERVIEW -->
       <section id="view-overview" class="view">
         <div class="kpis" id="kpis"></div>
-        <div class="panel">
-          <div class="panel-head"><h2>Actual vs Commitment</h2><div class="controls"><span class="muted small" id="ovPieInfo"></span><select id="ovArea" aria-label="Task area"></select></div></div>
-          <div class="pies" id="ovPies"></div>
-        </div>
         <div class="grid-2">
           <div class="panel">
             <div class="panel-head"><h2>Highest not-done gap</h2></div>
@@ -95,11 +91,6 @@
             <p id="empSub" class="muted"></p>
           </div>
           <div class="kpis" id="empKpis"></div>
-
-          <div class="panel">
-            <div class="panel-head"><h2>Actual vs Commitment</h2><div class="controls"><span class="muted small" id="empPieInfo"></span><select id="empArea" aria-label="Task area"></select></div></div>
-            <div class="pies" id="empPies"></div>
-          </div>
 
           <div class="panel">
             <div class="panel-head"><h2>Task areas</h2></div>
@@ -130,6 +121,10 @@
         <div class="panel">
           <div class="panel-head"><h2>Planned vs Actual</h2><div class="controls"><span class="muted small" id="shPieInfo"></span></div></div>
           <div id="shPlan"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Actual Not Done vs Commitment Not Done</h2><div class="controls"><span class="muted small" id="shNdInfo"></span></div></div>
+          <div id="shNd"></div>
         </div>
         <div class="panel sheet-panel">
           <div class="panel-head">
