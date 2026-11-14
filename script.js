@@ -294,7 +294,7 @@ const KPI_ICONS = [
 ];
 function kpiHTML(items) {
   return items.map((k) => {
-    const icon = (KPI_ICONS.find(([re]) => re.test(k.l)) || [])[1] || KPI_ICONS[1][1];
+    const icon = k.icon || (KPI_ICONS.find(([re]) => re.test(k.l)) || [])[1] || KPI_ICONS[1][1];
     return `<div class="kpi ${k.tone || ""}">
       <span class="kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg></span>
       <div><div class="v">${k.v}</div><div class="l">${k.l}</div></div>
@@ -467,29 +467,6 @@ function renderWeekly(e) {
 
 const fmtWeekVal = (v) => (Math.abs(v) < 1 && v !== 0 ? pct(v) : fmt(v));
 
-/* ---- pie charts: Not done aur Delay, Actual vs Commitment ---- */
-// weekly cell ko "kitna % not done" (0-100) mein: "-20" aur "-20%" dono = 20; plus wali value = 0
-// weekly cell ki value sheet jaisi % mein: "-100%" = -100, "-20%" = -20, "-12" = -12 (num() "-100%" ko -1 deta hai)
-function pctOf(v, text = "") {
-  if (v === null) return null;
-  return /%$/.test(text) || Math.abs(v) < 1 ? v * 100 : v;
-}
-
-function notDoneOf(v, text = "") {
-  if (v === null) return null;
-  return Math.min(100, Math.max(0, -pctOf(v, text)));
-}
-
-// chune hue weeks mein jitne cells bhare hain unka average not-done %
-function avgNotDone(rows, k, idx = visibleWeeks()) {
-  const vals = [];
-  for (const r of rows) for (const i of idx) {
-    const x = notDoneOf(r.weekly[i][k], r.weeklyText[i][k]);
-    if (x !== null) vals.push(x);
-  }
-  return { n: vals.length, notDone: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
-}
-
 function renderEmpComments(e) {
   const d = state.data;
   const byRow = new Map(e.rows.map((r) => [r.gridRow, r]));
@@ -612,95 +589,172 @@ function renderSheetHist() {
   // graph sirf ek employee chunne par; All employees par poora panel chhupa
   const all = state.selectedEmp === "__ALL__";
   $("#shPlan").closest(".panel").hidden = all;
-  $("#shNd").closest(".panel").hidden = all;
-  if (all) return;
-  const rows = state.data.rows.filter((r) => r.team && (state.selectedEmp === "__ALL__" || r.team === state.selectedEmp));
-  renderPlanActual(rows);
-  renderNotDone(rows);
+  if (!all) renderPlanActual(state.data.rows.filter((r) => r.team === state.selectedEmp));
+  renderTrend(); // weekly graph All employees par bhi (sabka jod)
 }
 
-// lamba naam shabdon ke hisaab se 2-3 line mein (kaata nahi)
-function wrapLabel(a) {
-  const lines = [];
-  for (const w of String(a).split(/\s+/)) {
-    const last = lines[lines.length - 1];
-    if (last && (last + " " + w).length <= 14) lines[lines.length - 1] = last + " " + w;
-    else lines.push(w);
-  }
-  return lines;
+/* ---- Planned vs Actual ke neeche: chune weeks ka bar graph, Not Done vs Delay (kitne task) ----
+   Sheet (aur Book12.xlsx) jaisa hisaab: har week ke Not Done / Delay column mein jitne cells
+   0 se kam hain (-10, -100% ...) utne task = COUNTIF(<0). 0 = kaam theek hua, khaali cell = entry nahi. */
+const TR_ICONS = {
+  tasks: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  nd: '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>',
+  dl: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>',
+  perf: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+};
+
+// aaj tak ka aakhri week (visibleWeeks jaisa)
+function currentWeek() {
+  const today = new Date();
+  let cur = -1;
+  state.data.weeks.forEach((w, i) => { if (w.date && w.date <= today) cur = i; });
+  return cur === -1 ? state.data.weeks.length - 1 : cur;
 }
 
-/* ---- Planned vs Actual ke neeche: Y = Result in area, Actual Not Done (laal) vs Commitment Not Done (hara) ---- */
-// chune week range ke bhare cells ka average not-done % (pehle wale pie jaisa hi hisaab)
-function renderNotDone(rows) {
-  const box = $("#shNd");
-  if (!box.children.length) {
-    box.innerHTML = `
-      <div class="pie">
-        <p class="pie-calc" id="shNdCalc"></p>
-        <div class="pa-scroll"><div class="line-chart pa-chart" id="shNdWrap"><canvas id="shNdChart"></canvas></div></div>
-        <p class="pie-verdict" id="shNdVerdict"></p>
-      </div>`;
+// filter ki halat: sheet badle to dobara default (aakhri 4 week, aaj tak)
+function trendState() {
+  const n = state.data.weeks.length;
+  let t = state.trend;
+  if (!t || t.sheet !== state.sheet || t.end >= n) {
+    const end = Math.max(0, currentWeek());
+    t = state.trend = { sheet: state.sheet, start: Math.max(0, end - 3), end, off: new Set() };
   }
+  return t;
+}
 
-  const idx = visibleWeeks(), weeks = state.data.weeks;
-  const areas = [...new Set(rows.filter((r) => r.planned > 0).map((r) => r.area))];
-  const pts = areas.map((area) => {
-    const use = rows.filter((r) => r.area === area);
-    return { area, act: avgNotDone(use, "scoreNotDone", idx).notDone, com: avgNotDone(use, "commitNotDone", idx).notDone };
+function trendSelected() {
+  const t = trendState(), idx = [];
+  for (let i = t.start; i <= t.end; i++) if (!t.off.has(i)) idx.push(i);
+  return idx;
+}
+
+function renderTrendFilters() {
+  const d = state.data, t = trendState();
+  const names = d.employees.map((e) => e.name).sort((a, b) => a.localeCompare(b));
+  $("#trEmp").innerHTML = `<option value="__ALL__">All employees (${names.length})</option>` + names.map((n) => `<option>${esc(n)}</option>`).join("");
+  $("#trEmp").value = state.selectedEmp;
+  const opts = d.weeks.map((w, i) => `<option value="${i}">Week ${i + 1} · ${esc(w.label)}</option>`).join("");
+  $("#trStart").innerHTML = opts; $("#trEnd").innerHTML = opts;
+  $("#trStart").value = t.start; $("#trEnd").value = t.end;
+  $("#trWeeks").innerHTML = d.weeks.slice(t.start, t.end + 1).map((w, k) => {
+    const i = t.start + k;
+    return `<label class="tr-chip"><input type="checkbox" value="${i}"${t.off.has(i) ? "" : " checked"} /> Week ${i + 1} <small>${esc(w.label)}</small></label>`;
+  }).join("") || `<span class="muted small">Is range mein koi week nahi</span>`;
+}
+
+function renderTrend() {
+  const d = state.data;
+  renderTrendFilters();
+  const src = $("#trSrc").value, kNd = `${src}NotDone`, kDl = `${src}Delay`;
+  const all = state.selectedEmp === "__ALL__";
+  const who = all ? "All employees" : state.selectedEmp;
+  const rows = d.rows.filter((r) => r.team && (all || r.team === state.selectedEmp)); // har row ek task, ek baar
+  const idx = trendSelected();
+
+  // har chune week ka hisaab; koi entry nahi = missing week (graph mein khaali, toota nahi)
+  const pts = idx.map((i, n) => {
+    let tasks = 0, nd = 0, dl = 0;
+    for (const r of rows) {
+      const a = r.weekly[i][kNd], b = r.weekly[i][kDl];
+      if (a === null && b === null) continue;
+      tasks++;
+      if (a !== null && a < 0) nd++;
+      if (b !== null && b < 0) dl++;
+    }
+    return { i, n: n + 1, label: d.weeks[i].label, tasks, nd: tasks ? nd : null, dl: tasks ? dl : null };
   });
-  const inGraph = rows.filter((r) => areas.includes(r.area)); // total wahi rows jo graph mein hain
-  const totA = avgNotDone(inGraph, "scoreNotDone", idx).notDone, totC = avgNotDone(inGraph, "commitNotDone", idx).notDone;
-  const who = state.selectedEmp;
-  const show = (v) => (v === null ? "–" : `${+v.toFixed(1)}%`);
-  const GREEN = "#2f9e4f", RED = "#b4372f"; // Actual laal, Commitment hara
-  const range = idx.length
-    ? `Weeks: ${weeks[idx[0]].label}${idx.length > 1 ? " – " + weeks[idx[idx.length - 1]].label : ""}`
-    : "Is week range mein koi week nahi";
+  const have = pts.filter((p) => p.tasks);
+  const sum = (k) => have.reduce((s, p) => s + p[k], 0);
+  const totTasks = sum("tasks"), totNd = sum("nd"), totDl = sum("dl");
+  // performance = jin task entries mein na Not Done na Delay... seedha: (tasks - not done) / tasks
+  const perf = totTasks ? (totTasks - totNd) / totTasks : null;
+  const first = have[0], last = have[have.length - 1];
+  const trend = have.length < 2 ? null : (last.nd + last.dl) - (first.nd + first.dl); // minus = sudhar
+  const trendText = trend === null ? "" : trend < 0 ? " · improving ▲" : trend > 0 ? " · declining ▼" : " · same";
 
-  $("#shNdInfo").textContent = `${who} · ${range}`;
-  $("#shNdCalc").innerHTML = `Actual Not Done: <b class="act">${show(totA)}</b> &nbsp;vs&nbsp; Commitment Not Done: <b class="plan">${show(totC)}</b>`;
-  $("#shNdWrap").style.width = `max(100%, ${pts.length * 92}px)`;
+  const share = (v, of) => (of ? `${+((v / of) * 100).toFixed(1)}%` : "–"); // kul tasks mein se kitna %
+  const srcName = src === "score" ? "Actual" : "Commitment";
+  $("#trInfo").textContent = `${who} · ${srcName} · ${idx.length} week${idx.length === 1 ? "" : "s"}`;
+  $("#trKpis").innerHTML = kpiHTML([
+    { v: fmt(totTasks), l: "Total tasks", icon: TR_ICONS.tasks },
+    { v: `${fmt(totNd)} <small class="kpi-pct">${share(totNd, totTasks)}</small>`, l: "Total Not Done", icon: TR_ICONS.nd, tone: totTasks ? (totNd ? "bad" : "good") : "" },
+    { v: `${fmt(totDl)} <small class="kpi-pct">${share(totDl, totTasks)}</small>`, l: "Total Delay", icon: TR_ICONS.dl, tone: totTasks ? (totDl ? "warn" : "good") : "" },
+    { v: pct(perf), l: `Weekly performance${trendText}`, icon: TR_ICONS.perf, tone: tone(perf) },
+  ]);
 
-  drawChart("shNdChart", {
+  // Excel (Book12) jaisa: har week ke do khade bar, Not Done laal, Delay orange
+  const RED = "#d64541", ORANGE = "#ed7d31";
+  const bar = (label, k, color) => ({
+    label, data: pts.map((p) => p[k]), valueFormat: (v, i) => `${share(v, pts[i].tasks)} (${v})`, borderColor: color, backgroundColor: color,
+    borderRadius: 3, barPercentage: 0.75, categoryPercentage: 0.6, maxBarThickness: 90,
+  });
+  drawChart("trChart", {
     type: "bar",
     data: {
-      labels: pts.map((p) => wrapLabel(p.area)),
-      datasets: [
-        { label: "Actual Not Done", data: pts.map((p) => p.act), valueFormat: show, borderColor: RED, backgroundColor: RED, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
-        { label: "Commitment Not Done", data: pts.map((p) => p.com), valueFormat: show, borderColor: GREEN, backgroundColor: GREEN, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
-      ],
+      labels: pts.map((p) => [`Week ${p.i + 1}`, p.label]),
+      datasets: [bar("Not Done", "nd", RED), bar("Delay", "dl", ORANGE)],
     },
     options: {
-      layout: { padding: { top: 16 } },
+      layout: { padding: { top: 20, left: 8, right: 8 } },
+      interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { position: "top" },
-        tooltip: { callbacks: { title: (items) => pts[items[0].dataIndex].area, label: (ctx) => `${ctx.dataset.label}: ${show(ctx.raw ?? null)}` } },
+        title: { display: true, text: `${who}: weekly Not Done vs Delay (${srcName})`, font: { size: 14, weight: "700", family: "Figtree" } },
+        legend: { position: "bottom" },
+        tooltip: { callbacks: {
+          title: (items) => { const p = pts[items[0].dataIndex]; return `Week ${p.i + 1} · ${p.label}`; },
+          label: (ctx) => { const p = pts[ctx.dataIndex]; return p.tasks ? `${ctx.dataset.label}: ${ctx.raw} of ${p.tasks} tasks (${share(ctx.raw, p.tasks)})` : `${ctx.dataset.label}: no data`; },
+        } },
       },
       scales: {
-        x: { title: { display: true, text: ["Result in area", range], font: { weight: "600" } }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 11, weight: "600" } } },
-        y: { beginAtZero: true, grace: "8%", title: { display: true, text: "Not Done %" }, ticks: { callback: (v) => `${v}%` }, grid: { color: "#eef1f5" } },
+        x: { title: { display: true, text: "Week", font: { weight: "600" } }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, font: { size: 11, weight: "600" } } },
+        y: { beginAtZero: true, grace: "12%", title: { display: true, text: "Number of tasks" }, ticks: { precision: 0 }, grid: { color: "#eef1f5" } },
       },
     },
     plugins: [pointLabels],
   });
 
-  const v = $("#shNdVerdict");
-  if (!pts.length) {
-    v.className = "pie-verdict";
-    v.textContent = `${who} ka koi Result in area planned nahi hai.`;
-  } else if (totA === null || totC === null) {
-    v.className = "pie-verdict";
-    v.textContent = totA === null ? "Is week range mein Actual Not Done ke cells abhi khaali hain." : "Is week range mein Commitment Not Done ke cells khaali hain.";
-  } else {
-    const worse = pts.filter((p) => p.act !== null && p.com !== null && p.act > p.com + 0.5).length;
-    const gap = totA - totC;
-    v.className = `pie-verdict ${gap > 0.5 ? "bad" : "good"}`;
-    v.textContent = gap > 0.5
-      ? `${who}: Actual Not Done commitment se ${show(gap)} zyada hai. ${worse} result in area mein commitment se kharab.`
-      : gap < -0.5 ? `${who}: Actual Not Done commitment se ${show(-gap)} kam hai. Commitment se behtar.`
-      : `${who}: Actual aur Commitment Not Done barabar hain.`;
-  }
+  const empty = $("#trEmpty");
+  empty.hidden = have.length > 0;
+  empty.textContent = !idx.length ? "Koi week select nahi hai. Upar se week chuno." : `${who} ka in weeks mein koi data nahi hai.`;
+
+  const v = $("#trVerdict");
+  if (!have.length) { v.className = "pie-verdict"; v.textContent = ""; v.hidden = true; return; }
+  v.hidden = false;
+  const peak = have.reduce((m, p) => (p.nd > m.nd ? p : m), have[0]);
+  const missing = pts.length - have.length;
+  let msg = `Sabse zyada Not Done: Week ${peak.i + 1} (${peak.label}) mein ${peak.nd} task.`;
+  if (trend !== null) msg = (trend < 0 ? `Performance sudhar rahi hai: Not Done + Delay ${first.nd + first.dl} se ghat ke ${last.nd + last.dl}. `
+    : trend > 0 ? `Performance gir rahi hai: Not Done + Delay ${first.nd + first.dl} se badh ke ${last.nd + last.dl}. `
+    : `Not Done + Delay pehle aur aakhri week mein barabar (${last.nd + last.dl}). `) + msg;
+  if (missing) msg += ` ${missing} week mein entry nahi hai.`;
+  v.className = `pie-verdict ${trend > 0 || (trend === null && totNd) ? "bad" : "good"}`;
+  v.textContent = msg;
+}
+
+function initTrendEvents() {
+  const redraw = () => { if (state.data) renderTrend(); };
+  $("#trEmp").addEventListener("change", (e) => selectEmployee(e.target.value));
+  const range = () => {
+    const t = trendState();
+    let a = +$("#trStart").value, b = +$("#trEnd").value;
+    if (a > b) [a, b] = [b, a];
+    t.start = a; t.end = b;
+    redraw();
+  };
+  $("#trStart").addEventListener("change", range);
+  $("#trEnd").addEventListener("change", range);
+  $("#trSrc").addEventListener("change", redraw);
+  $("#trWeeks").addEventListener("change", (e) => {
+    const i = +e.target.value, t = trendState();
+    if (e.target.checked) t.off.delete(i); else t.off.add(i);
+    redraw();
+  });
+  $("#trAll").addEventListener("click", () => { trendState().off.clear(); redraw(); });
+  $("#trNone").addEventListener("click", () => {
+    const t = trendState();
+    for (let i = t.start; i <= t.end; i++) t.off.add(i);
+    redraw();
+  });
 }
 
 const doneShare = (plan, act) => (plan ? (act / plan) * 100 : null);
@@ -720,7 +774,7 @@ const pointLabels = {
       meta.data.forEach((pt, i) => {
         if (ds.data[i] === null || ds.data[i] === undefined) return;
         ctx.fillStyle = ds.borderColor;
-        ctx.fillText((ds.valueFormat || fmt)(ds.data[i]), pt.x, pt.y - 3);
+        ctx.fillText((ds.valueFormat || fmt)(ds.data[i], i), pt.x, pt.y - 3);
       });
     });
     ctx.restore();
@@ -1259,6 +1313,7 @@ function bind() {
   });
   $("#onlyFilledRows").addEventListener("change", renderEmployee);
   $("#hideEmpty").addEventListener("change", renderSheetView);
+  initTrendEvents();
   $("#sheetSearch").addEventListener("input", renderSheetView);
 
   $("#year").textContent = new Date().getFullYear();

@@ -123,8 +123,20 @@
           <div id="shPlan"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h2>Actual Not Done vs Commitment Not Done</h2><div class="controls"><span class="muted small" id="shNdInfo"></span></div></div>
-          <div id="shNd"></div>
+          <div class="panel-head"><h2>Weekly performance: Not Done vs Delay</h2><div class="controls"><span class="muted small" id="trInfo"></span></div></div>
+          <div class="tr-filters">
+            <label>Employee <select id="trEmp" aria-label="Employee"></select></label>
+            <label>Start week <select id="trStart" aria-label="Start week"></select></label>
+            <label>End week <select id="trEnd" aria-label="End week"></select></label>
+            <label>Data <select id="trSrc" aria-label="Data"><option value="score">Actual</option><option value="commit">Commitment</option></select></label>
+          </div>
+          <div class="tr-weeks">
+            <span class="tr-weeks-head">Weeks <button type="button" class="tr-link" id="trAll">Sab chuno</button><button type="button" class="tr-link" id="trNone">Sab hatao</button></span>
+            <div id="trWeeks" class="tr-chips"></div>
+          </div>
+          <div class="kpis tr-kpis" id="trKpis"></div>
+          <div class="line-chart tr-chart"><canvas id="trChart"></canvas><div class="tr-empty" id="trEmpty" hidden></div></div>
+          <p class="pie-verdict" id="trVerdict"></p>
         </div>
         <div class="panel sheet-panel">
           <div class="panel-head">

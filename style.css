@@ -621,3 +621,32 @@ body {
 .pie-calc b.act { color: var(--bad); font-weight: 700; }
 .pa-scroll { overflow-x: auto; }
 .pa-chart { height: 440px; min-width: 100%; }
+
+/* ---------- sheet view: weekly Not Done vs DL line graph ---------- */
+.tr-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tr-filters label { display: grid; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tr-filters select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none;
+}
+.tr-filters select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.tr-weeks { margin-bottom: 16px; }
+.tr-weeks-head { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.tr-link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.tr-link:hover { text-decoration: underline; }
+.tr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tr-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px;
+  font-size: 13px; font-weight: 600; cursor: pointer; background: var(--surface); user-select: none;
+}
+.tr-chip small { color: var(--muted); font-weight: 500; }
+.tr-chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tr-chip input { accent-color: var(--accent); margin: 0; }
+.tr-kpis { margin-bottom: 16px; }
+.tr-chart { height: 380px; }
+.tr-empty {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center;
+  background: rgba(255,255,255,.88); color: var(--muted); font-weight: 600; border-radius: var(--radius-sm);
+}
+.tr-empty[hidden] { display: none; }
+.kpi .v .kpi-pct { font-size: 15px; font-weight: 700; opacity: .85; margin-left: 4px; }
