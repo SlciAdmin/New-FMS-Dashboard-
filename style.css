@@ -643,10 +643,26 @@ body {
 .tr-chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .tr-chip input { accent-color: var(--accent); margin: 0; }
 .tr-kpis { margin-bottom: 16px; }
-.tr-chart { height: 380px; }
+.tr-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+.tr-card { border: 1px solid var(--line, #e3e8ef); border-radius: var(--radius-sm); padding: 14px 14px 8px; background: #fff; min-width: 0; }
+.tr-head { margin-bottom: 6px; }
+.tr-head h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 19px; font-weight: 700; }
+.tr-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent, #2f6fed); color: #fff; font-size: 13px; }
+.tr-head p { margin: 0 0 10px; color: #3b4658; font-size: 15px; line-height: 1.5; }
+.tr-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; font-size: 14px; font-weight: 600; }
+.tr-key { display: inline-flex; align-items: center; gap: 6px; }
+.tr-key i { width: 22px; height: 0; border-top: 3px solid currentColor; }
+.k-plan { color: #2f9e4f; } .k-plan i { border-top: 7px solid rgba(47,158,79,.45); border-radius: 4px; }
+.k-act, .k-nd { color: #d64541; } .k-dl { color: #ed7d31; } .k-cdl { color: #7b4fc9; }
+.tr-sub { margin-left: auto; }
+.tr-wrap { position: relative; }
+.tr-scroll { overflow-x: auto; }
+.tr-yaxis { position: absolute; left: 0; top: 0; pointer-events: none; }
+.tr-chart { height: 560px; }
+@media (max-width: 900px) { .tr-grid { grid-template-columns: 1fr; } }
 .tr-empty {
-  position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center;
-  background: rgba(255,255,255,.88); color: var(--muted); font-weight: 600; border-radius: var(--radius-sm);
+  margin: 0 0 16px; padding: 14px; text-align: center;
+  background: #f5f7fa; color: var(--muted); font-weight: 600; border-radius: var(--radius-sm);
 }
 .tr-empty[hidden] { display: none; }
 .kpi .v .kpi-pct { font-size: 15px; font-weight: 700; opacity: .85; margin-left: 4px; }

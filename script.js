@@ -584,13 +584,9 @@ function syncHScroll() {
   bar.scrollLeft = w.scrollLeft;
 }
 
-/* ---- sheet view ke upar: ek graph, Y = Result in area, Planned (D, hara) vs Actual (E, laal), upar chune employee ke hisaab se ---- */
+/* ---- sheet view ke upar: weekly ke chaar graph (purana Planned vs Actual bar graph hata diya) ---- */
 function renderSheetHist() {
-  // graph sirf ek employee chunne par; All employees par poora panel chhupa
-  const all = state.selectedEmp === "__ALL__";
-  $("#shPlan").closest(".panel").hidden = all;
-  if (!all) renderPlanActual(state.data.rows.filter((r) => r.team === state.selectedEmp));
-  renderTrend(); // weekly graph All employees par bhi (sabka jod)
+  renderTrend(); // All employees par bhi (sabka jod)
 }
 
 /* ---- Planned vs Actual ke neeche: chune weeks ka bar graph, Not Done vs Delay (kitne task) ----
@@ -615,9 +611,11 @@ function currentWeek() {
 function trendState() {
   const n = state.data.weeks.length;
   let t = state.trend;
-  if (!t || t.sheet !== state.sheet || t.end >= n) {
-    const end = Math.max(0, currentWeek());
-    t = state.trend = { sheet: state.sheet, start: Math.max(0, end - 3), end, off: new Set() };
+  const range = $("#weekRange").value;
+  if (!t || t.sheet !== state.sheet || t.end >= n || t.range !== range) {
+    const vis = visibleWeeks();
+    const start = vis.length ? vis[0] : 0, end = vis.length ? vis[vis.length - 1] : Math.max(0, n - 1);
+    t = state.trend = { sheet: state.sheet, range, start, end, off: new Set() };
   }
   return t;
 }
@@ -642,98 +640,196 @@ function renderTrendFilters() {
   }).join("") || `<span class="muted small">Is range mein koi week nahi</span>`;
 }
 
+/* ---- chaar line graph, sab ka X axis = week ki date, Y axis = kitne task ----
+   1) Planned (hara) vs Actual (laal)   2) Actual Delay   3) Commitment Not Done   4) Commitment Delay
+   Planned = us week jin task mein koi bhi entry hai; Actual = Actual (Score) Not Done < 0 nahi (kaam hua).
+   Not Done / Delay = us column mein 0 se kam wale cells (COUNTIF <0), khaali = entry nahi. */
 function renderTrend() {
   const d = state.data;
   renderTrendFilters();
-  const src = $("#trSrc").value, kNd = `${src}NotDone`, kDl = `${src}Delay`;
   const all = state.selectedEmp === "__ALL__";
   const who = all ? "All employees" : state.selectedEmp;
-  const rows = d.rows.filter((r) => r.team && (all || r.team === state.selectedEmp)); // har row ek task, ek baar
+  const empRows = d.rows.filter((r) => r.team && (all || r.team === state.selectedEmp)); // har row ek task
+  // Task dropdown: chune employee ke tasks (Result in area); "All tasks" = sab jod ke
+  const taskNames = [...new Set(empRows.map((r) => r.area).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!taskNames.includes(state.trTask)) state.trTask = "__ALL__";
+  $("#trTask").innerHTML = `<option value="__ALL__">All tasks (${taskNames.length})</option>` + taskNames.map((n) => `<option>${esc(n)}</option>`).join("");
+  $("#trTask").value = state.trTask;
+  const oneTask = state.trTask !== "__ALL__";
+  const rows = oneTask ? empRows.filter((r) => r.area === state.trTask) : empRows;
   const idx = trendSelected();
+  const neg = (v) => v !== null && v < 0;
 
-  // har chune week ka hisaab; koi entry nahi = missing week (graph mein khaali, toota nahi)
-  const pts = idx.map((i, n) => {
-    let tasks = 0, nd = 0, dl = 0;
+  // har week: kitne task + un tasks ke naam (tooltip mein dikhane ke liye)
+  const pts = idx.map((i) => {
+    const names = { plan: [], act: [], aDl: [], cNd: [], cDl: [] };
     for (const r of rows) {
-      const a = r.weekly[i][kNd], b = r.weekly[i][kDl];
-      if (a === null && b === null) continue;
-      tasks++;
-      if (a !== null && a < 0) nd++;
-      if (b !== null && b < 0) dl++;
+      const w = r.weekly[i];
+      const hasScore = w.scoreNotDone !== null || w.scoreDelay !== null;
+      if (!hasScore && w.commitNotDone === null && w.commitDelay === null) continue;
+      const area = (all && r.team ? `${r.area} (${r.team})` : r.area) || "(no name)";
+      names.plan.push(area);
+      if (hasScore && !neg(w.scoreNotDone)) names.act.push(area);
+      if (neg(w.scoreDelay)) names.aDl.push(area);
+      if (neg(w.commitNotDone)) names.cNd.push(area);
+      if (neg(w.commitDelay)) names.cDl.push(area);
     }
-    return { i, n: n + 1, label: d.weeks[i].label, tasks, nd: tasks ? nd : null, dl: tasks ? dl : null };
+    const plan = names.plan.length, has = plan > 0, n = (k) => (has ? names[k].length : null);
+    return { i, label: d.weeks[i].label, names, plan, act: n("act"), aDl: n("aDl"), cNd: n("cNd"), cDl: n("cDl") };
   });
-  const have = pts.filter((p) => p.tasks);
+  const have = pts.filter((p) => p.plan);
   const sum = (k) => have.reduce((s, p) => s + p[k], 0);
-  const totTasks = sum("tasks"), totNd = sum("nd"), totDl = sum("dl");
-  // performance = jin task entries mein na Not Done na Delay... seedha: (tasks - not done) / tasks
-  const perf = totTasks ? (totTasks - totNd) / totTasks : null;
-  const first = have[0], last = have[have.length - 1];
-  const trend = have.length < 2 ? null : (last.nd + last.dl) - (first.nd + first.dl); // minus = sudhar
-  const trendText = trend === null ? "" : trend < 0 ? " · improving ▲" : trend > 0 ? " · declining ▼" : " · same";
+  const tot = { plan: sum("plan"), act: sum("act"), aDl: sum("aDl"), cNd: sum("cNd"), cDl: sum("cDl") };
+  const share = (v, of) => (of ? `${+((v / of) * 100).toFixed(1)}%` : "–");
 
-  const share = (v, of) => (of ? `${+((v / of) * 100).toFixed(1)}%` : "–"); // kul tasks mein se kitna %
-  const srcName = src === "score" ? "Actual" : "Commitment";
-  $("#trInfo").textContent = `${who} · ${srcName} · ${idx.length} week${idx.length === 1 ? "" : "s"}`;
+  $("#trInfo").textContent = `${who} · ${idx.length} week${idx.length === 1 ? "" : "s"}`;
   $("#trKpis").innerHTML = kpiHTML([
-    { v: fmt(totTasks), l: "Total tasks", icon: TR_ICONS.tasks },
-    { v: `${fmt(totNd)} <small class="kpi-pct">${share(totNd, totTasks)}</small>`, l: "Total Not Done", icon: TR_ICONS.nd, tone: totTasks ? (totNd ? "bad" : "good") : "" },
-    { v: `${fmt(totDl)} <small class="kpi-pct">${share(totDl, totTasks)}</small>`, l: "Total Delay", icon: TR_ICONS.dl, tone: totTasks ? (totDl ? "warn" : "good") : "" },
-    { v: pct(perf), l: `Weekly performance${trendText}`, icon: TR_ICONS.perf, tone: tone(perf) },
+    { v: fmt(tot.plan), l: "Planned tasks", icon: TR_ICONS.tasks },
+    { v: `${fmt(tot.act)} <small class="kpi-pct">${share(tot.act, tot.plan)}</small>`, l: "Actual done", icon: TR_ICONS.perf, tone: tot.plan ? (tot.act < tot.plan ? "warn" : "good") : "" },
+    { v: `${fmt(tot.aDl)} <small class="kpi-pct">${share(tot.aDl, tot.plan)}</small>`, l: "Actual Delay", icon: TR_ICONS.dl, tone: tot.plan ? (tot.aDl ? "warn" : "good") : "" },
+    { v: `${fmt(tot.cNd)} <small class="kpi-pct">${share(tot.cNd, tot.plan)}</small>`, l: "Commitment Not Done", icon: TR_ICONS.nd, tone: tot.plan ? (tot.cNd ? "bad" : "good") : "" },
+    { v: `${fmt(tot.cDl)} <small class="kpi-pct">${share(tot.cDl, tot.plan)}</small>`, l: "Commitment Delay", icon: TR_ICONS.dl, tone: tot.plan ? (tot.cDl ? "warn" : "good") : "" },
   ]);
 
-  // Excel (Book12) jaisa: har week ke do khade bar, Not Done laal, Delay orange
-  const RED = "#d64541", ORANGE = "#ed7d31";
-  const bar = (label, k, color) => ({
-    label, data: pts.map((p) => p[k]), valueFormat: (v, i) => `${share(v, pts[i].tasks)} (${v})`, borderColor: color, backgroundColor: color,
-    borderRadius: 3, barPercentage: 0.75, categoryPercentage: 0.6, maxBarThickness: 90,
+  const GREEN = "#2f9e4f", RED = "#d64541", ORANGE = "#ed7d31", PURPLE = "#7b4fc9";
+  // Graph (hath ke sketch jaisa): X axis par har task ka ek group -> us task ke chune hue weeks
+  // (Week 1, Week 2 ...) aur group ke neeche task ka naam; Y axis = 0-100%.
+  // Sheet ke % cell (-10% = 10% not done / delay) seedhe %, 0 se kam nahi.
+  const taskLabel = oneTask ? state.trTask : "All tasks";
+  const asPct = (r, i, k) => {
+    const v = r.weekly[i][k];
+    if (v === null) return null;
+    return /%/.test(r.weeklyText[i][k]) || Math.abs(v) < 1 ? v * 100 : v; // "-10%" / -0.1 = -10, "-10" = -10
+  };
+  const pctOf = (r, i, k) => { const v = asPct(r, i, k); return v === null ? null : v < 0 ? Math.round(-v * 10) / 10 : 0; };
+  const tasks = [];
+  for (const r of rows) {
+    const name = all ? `${r.area} (${r.team})` : r.area;
+    let g = tasks.find((x) => x.name === name);
+    if (!g) tasks.push((g = { name, rows: [] }));
+    g.rows.push(r);
+  }
+  tasks.sort((a, b) => a.name.localeCompare(b.name));
+  // X axis: har week mein har task ka ek point (neeche task ka naam khada, 90°),
+  // tasks ke neeche week + date; poori line lagataar, weeks ke beech koi tukda / divider nahi
+  const slots = [], groups = [];
+  idx.forEach((i, wi) => {
+    const wk = { name: `Week ${wi + 1} · ${d.weeks[i].label}`, from: slots.length };
+    for (const g of tasks) {
+      const vals = { plan: null, act: null, aDl: null, cNd: null, cDl: null };
+      for (const r of g.rows) {
+        const w = r.weekly[i];
+        const hasScore = w.scoreNotDone !== null || w.scoreDelay !== null;
+        if (!hasScore && w.commitNotDone === null && w.commitDelay === null) continue;
+        vals.plan = 100;
+        const done = hasScore ? Math.max(0, Math.round((100 - (pctOf(r, i, "scoreNotDone") || 0)) * 10) / 10) : null;
+        const mx = (k, v) => { if (v !== null) vals[k] = Math.max(vals[k] ?? 0, v); };
+        mx("act", done); mx("aDl", pctOf(r, i, "scoreDelay")); mx("cNd", pctOf(r, i, "commitNotDone")); mx("cDl", pctOf(r, i, "commitDelay"));
+      }
+      slots.push({ g, i, n: wi + 1, label: d.weeks[i].label, vals });
+    }
+    wk.to = slots.length - 1;
+    groups.push(wk);
   });
-  drawChart("trChart", {
-    type: "bar",
-    data: {
-      labels: pts.map((p) => [`Week ${p.i + 1}`, p.label]),
-      datasets: [bar("Not Done", "nd", RED), bar("Delay", "dl", ORANGE)],
+
+  const short = (t) => (t.length > 26 ? t.slice(0, 25).trimEnd() + "…" : t);
+  const labels = slots.map((s) => (s ? short(s.g.name) : ""));
+  const line = (label, k, color) => {
+    const real = slots.map((s) => (s ? s.vals[k] : null));
+    return {
+      label, real, data: real.map((v) => (v === null ? null : Math.min(100, v))), borderColor: color, backgroundColor: color,
+      borderWidth: 3, pointRadius: 6, pointHoverRadius: 8, tension: 0, spanGaps: true, clip: false, pointBorderColor: "#fff", pointBorderWidth: 2, labelBox: true, labelFont: "700 12px Figtree, sans-serif", valueFormat: (v, i) => `${+real[i].toFixed(1)}%`,
+    };
+  };
+  // har week ke tasks ke neeche week + date
+  const groupNames = {
+    id: "groupNames",
+    afterDraw(c) {
+      const groups = TR_GROUPS[c.canvas.id] || [];
+      const { ctx, scales: { x }, chartArea: a } = c;
+      ctx.save();
+      ctx.font = "700 15px Figtree, sans-serif"; ctx.fillStyle = "#1f4f9c"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+      for (const g of groups) {
+        const x1 = x.getPixelForValue(g.from), x2 = x.getPixelForValue(g.to), mid = (x1 + x2) / 2;
+        const maxW = Math.max(80, x2 - x1 + 40), words = g.name.split(/\s+/), out = [];
+        for (const w of words) { const t = out.length ? `${out[out.length - 1]} ${w}` : w; if (out.length && ctx.measureText(t).width <= maxW) out[out.length - 1] = t; else out.push(w); }
+        // week ke tasks ke neeche chhoti bracket line, us ke neeche week ka naam (kaunsa task kis week ka)
+        const half = c.data.labels.length > 1 ? Math.abs(x.getPixelForValue(1) - x.getPixelForValue(0)) / 2 - 3 : 20;
+        ctx.strokeStyle = "#9aa6b8"; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(x1 - half, x.bottom + 2); ctx.lineTo(x1 - half, x.bottom + 7); ctx.lineTo(x2 + half, x.bottom + 7); ctx.lineTo(x2 + half, x.bottom + 2); ctx.stroke();
+        out.forEach((t, k) => {
+          const w = ctx.measureText(t).width + 20;
+          ctx.save(); ctx.fillStyle = "#eef3fb"; ctx.strokeStyle = "#c9d6ea"; ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(mid - w / 2, x.bottom + 10 + k * 26, w, 24, 12) : ctx.rect(mid - w / 2, x.bottom + 10 + k * 26, w, 24);
+          ctx.fill(); ctx.stroke(); ctx.restore();
+          ctx.fillText(t, mid, x.bottom + 14 + k * 26);
+        });
+      }
+      ctx.restore();
     },
+  };
+  const nameRoom = 44;
+  const width = `max(100%, ${slots.length * 44 + 140}px)`; // bahut weeks/tasks hon to side mein scroll
+  document.querySelectorAll(".tr-chart").forEach((el) => { el.style.width = width; el.style.height = ""; });
+  const chart = (id, title, datasets, ref = {}) => { TR_GROUPS[id] = groups; TR_REFS[id] = ref; drawChart(id, {
+    type: "line",
+    data: { labels, datasets },
     options: {
-      layout: { padding: { top: 20, left: 8, right: 8 } },
+      layout: { padding: { top: 8, left: 6, right: 24, bottom: nameRoom } },
       interaction: { mode: "index", intersect: false },
       plugins: {
-        title: { display: true, text: `${who}: weekly Not Done vs Delay (${srcName})`, font: { size: 14, weight: "700", family: "Figtree" } },
-        legend: { position: "bottom" },
-        tooltip: { callbacks: {
-          title: (items) => { const p = pts[items[0].dataIndex]; return `Week ${p.i + 1} · ${p.label}`; },
-          label: (ctx) => { const p = pts[ctx.dataIndex]; return p.tasks ? `${ctx.dataset.label}: ${ctx.raw} of ${p.tasks} tasks (${share(ctx.raw, p.tasks)})` : `${ctx.dataset.label}: no data`; },
+        title: { display: false },
+        legend: { display: false }, // heading aur rang card ke upar HTML mein
+        tooltip: { titleFont: { size: 14 }, bodyFont: { size: 14 }, padding: 10, filter: (it) => it.raw !== null, callbacks: {
+          title: (items) => { const s = slots[items[0].dataIndex]; return s ? [s.g.name, `Week ${s.n} · ${s.label}`] : ""; },
+          label: (ctx) => `${ctx.dataset.label}: ${+ctx.dataset.real[ctx.dataIndex].toFixed(1)}%`,
         } },
       },
       scales: {
-        x: { title: { display: true, text: "Week", font: { weight: "600" } }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, font: { size: 11, weight: "600" } } },
-        y: { beginAtZero: true, grace: "12%", title: { display: true, text: "Number of tasks" }, ticks: { precision: 0 }, grid: { color: "#eef1f5" } },
+        x: { grid: { display: false }, ticks: { autoSkip: false, minRotation: 90, maxRotation: 90, padding: 4, color: "#1c2536", font: { size: 13, weight: "700" } } },
+        y: { min: -8, max: 112, title: { display: true, text: "Percent (%)", color: "#1c2536", font: { size: 14, weight: "700" } },
+          ticks: { stepSize: 10, autoSkip: false, callback: function (v) {
+            if (v > 100 || v < 0) return "";
+            const ref = TR_REFS[this.chart.canvas.id] || {};
+            return v === 100 && ref.top ? [`${v}%`, ref.top] : v === 0 && ref.bottom ? [`${v}%`, ref.bottom] : `${v}%`;
+          }, color: "#1c2536", font: { size: 13, weight: "700" } },
+          afterBuildTicks: (ax) => { ax.ticks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => ({ value })); },
+          grid: { color: (c) => (c.tick && (c.tick.value === 100 || c.tick.value === 0) ? "#c9d1dc" : "#eef1f5") } },
       },
     },
-    plugins: [pointLabels],
-  });
+    plugins: [pointLabels, groupNames, stickyY],
+  }); };
+  const sub = `${who} · ${taskLabel}`;
+  document.querySelectorAll(".tr-sub").forEach((el) => { el.textContent = sub; });
+  chart("trChart1", `Planned vs Actual (${sub})`, [
+    // Planned: moti hari line (neeche), % point ke upar hare rang mein
+    { ...line("Planned", "plan", GREEN), order: 2, borderWidth: 8, borderColor: "rgba(47,158,79,.45)", backgroundColor: GREEN, labelColor: GREEN, pointRadius: 7, pointHoverRadius: 8 },
+    // Actual: patli laal line (upar), % point ke neeche laal rang mein -> dono 100% hon to bhi dono dikhein
+    { ...line("Actual", "act", RED), order: 1, borderWidth: 2.5, pointRadius: 4, labelBelow: true },
+  ]);
+  chart("trChart2", `Actual Delay (${sub})`, [line("Actual Delay", "aDl", ORANGE)]);
+  chart("trChart3", `Commitment Not Done (${sub})`, [line("Commitment Not Done", "cNd", RED)]);
+  chart("trChart4", `Commitment Delay (${sub})`, [line("Commitment Delay", "cDl", PURPLE)]);
 
   const empty = $("#trEmpty");
   empty.hidden = have.length > 0;
-  empty.textContent = !idx.length ? "Koi week select nahi hai. Upar se week chuno." : `${who} ka in weeks mein koi data nahi hai.`;
+  empty.textContent = !idx.length ? "Koi week select nahi hai. Upar se week chuno." : `${who}${oneTask ? ` (${state.trTask})` : ""} ka in weeks mein koi data nahi hai.`;
 
   const v = $("#trVerdict");
   if (!have.length) { v.className = "pie-verdict"; v.textContent = ""; v.hidden = true; return; }
   v.hidden = false;
-  const peak = have.reduce((m, p) => (p.nd > m.nd ? p : m), have[0]);
   const missing = pts.length - have.length;
-  let msg = `Sabse zyada Not Done: Week ${peak.i + 1} (${peak.label}) mein ${peak.nd} task.`;
-  if (trend !== null) msg = (trend < 0 ? `Performance sudhar rahi hai: Not Done + Delay ${first.nd + first.dl} se ghat ke ${last.nd + last.dl}. `
-    : trend > 0 ? `Performance gir rahi hai: Not Done + Delay ${first.nd + first.dl} se badh ke ${last.nd + last.dl}. `
-    : `Not Done + Delay pehle aur aakhri week mein barabar (${last.nd + last.dl}). `) + msg;
+  let msg = `${who}: ${fmt(tot.plan)} planned mein se ${fmt(tot.act)} actual done (${share(tot.act, tot.plan)}). ` +
+    `Actual Delay ${fmt(tot.aDl)}, Commitment Not Done ${fmt(tot.cNd)}, Commitment Delay ${fmt(tot.cDl)}.`;
   if (missing) msg += ` ${missing} week mein entry nahi hai.`;
-  v.className = `pie-verdict ${trend > 0 || (trend === null && totNd) ? "bad" : "good"}`;
+  v.className = `pie-verdict ${tot.act < tot.plan || tot.cNd ? "bad" : "good"}`;
   v.textContent = msg;
 }
 
 function initTrendEvents() {
   const redraw = () => { if (state.data) renderTrend(); };
   $("#trEmp").addEventListener("change", (e) => selectEmployee(e.target.value));
+  $("#trTask").addEventListener("change", (e) => { state.trTask = e.target.value; redraw(); });
   const range = () => {
     const t = trendState();
     let a = +$("#trStart").value, b = +$("#trEnd").value;
@@ -743,7 +839,6 @@ function initTrendEvents() {
   };
   $("#trStart").addEventListener("change", range);
   $("#trEnd").addEventListener("change", range);
-  $("#trSrc").addEventListener("change", redraw);
   $("#trWeeks").addEventListener("change", (e) => {
     const i = +e.target.value, t = trendState();
     if (e.target.checked) t.off.delete(i); else t.off.add(i);
@@ -757,9 +852,24 @@ function initTrendEvents() {
   });
 }
 
-const doneShare = (plan, act) => (plan ? (act / plan) * 100 : null);
 
 // har patti ke upar uski value likho
+const TR_GROUPS = {};
+const TR_REFS = {}; // weekly graph: 0% / 100% line ka matlab
+// side mein scroll karne par bhi left wala Y axis (0%-100%) wahin ruka rahe: axis wala hissa ek upar rakhe canvas mein copy
+const stickyY = {
+  id: "stickyY",
+  afterRender(c) {
+    const ov = document.querySelector(`canvas.tr-yaxis[data-for="${c.canvas.id}"]`);
+    if (!ov || !c.chartArea) return;
+    const r = c.currentDevicePixelRatio || 1, w = Math.ceil(c.chartArea.left), h = c.height;
+    ov.width = w * r; ov.height = h * r; ov.style.width = `${w}px`; ov.style.height = `${h}px`;
+    const x = ov.getContext("2d");
+    x.fillStyle = "#fff"; x.fillRect(0, 0, ov.width, ov.height);
+    x.drawImage(c.canvas, 0, 0, w * r, h * r, 0, 0, w * r, h * r);
+  },
+}; // weekly graph: canvas id -> us waqt ke task groups
+
 const pointLabels = {
   id: "pointLabels",
   afterDatasetsDraw(chart) {
@@ -773,98 +883,35 @@ const pointLabels = {
       if (meta.hidden) return;
       meta.data.forEach((pt, i) => {
         if (ds.data[i] === null || ds.data[i] === undefined) return;
-        ctx.fillStyle = ds.borderColor;
-        ctx.fillText((ds.valueFormat || fmt)(ds.data[i], i), pt.x, pt.y - 3);
+        if (ds.hideLabel && ds.hideLabel(i)) return;
+        ctx.fillStyle = ds.labelColor || ds.borderColor;
+        ctx.font = ds.labelFont || "700 11px Figtree, sans-serif";
+        const say = (txt, y, below) => {
+          if (ds.labelBox) {
+            const w = ctx.measureText(txt).width + 8, h = 16, top = below ? y - 1 : y - h + 1;
+            ctx.save(); ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.strokeStyle = ds.labelColor || ds.borderColor; ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.roundRect ? ctx.roundRect(pt.x - w / 2, top, w, h, 3) : ctx.rect(pt.x - w / 2, top, w, h); ctx.fill(); ctx.stroke(); ctx.restore();
+          }
+          ctx.textBaseline = below ? "top" : "bottom"; ctx.fillText(txt, pt.x, y); ctx.textBaseline = "bottom";
+        };
+        if (!ds.textLines && ds.labelBelow) { say((ds.valueFormat || fmt)(ds.data[i], i), pt.y + 9, true); return; }
+        if (!ds.textLines) { say((ds.valueFormat || fmt)(ds.data[i], i), pt.y - 9, false); return; }
+        // number ki jagah task ke naam, ek ke neeche ek (point ke upar, ya textBelow ho to neeche)
+        const lines = ds.textLines(i);
+        if (!lines.length) return;
+        const LH = 13, n = meta.data.length;
+        ctx.textAlign = n > 1 && i === 0 ? "left" : n > 1 && i === n - 1 ? "right" : "center";
+        const x = ctx.textAlign === "left" ? pt.x - 4 : ctx.textAlign === "right" ? pt.x + 4 : pt.x;
+        lines.forEach((t, k) => {
+          const y = ds.textBelow ? pt.y + 10 + (k + 1) * LH : pt.y - 7 - (lines.length - 1 - k) * LH;
+          ctx.fillText(t, x, y);
+        });
+        ctx.textAlign = "center";
       });
     });
     ctx.restore();
   },
 };
-
-function renderPlanActual(rows) {
-  const box = $("#shPlan");
-  if (!box.children.length) {
-    box.innerHTML = `
-      <div class="pie">
-        <p class="pie-calc" id="shPlanCalc"></p>
-        <div class="pa-scroll"><div class="line-chart pa-chart" id="shPlanWrap"><canvas id="shPlanChart"></canvas></div></div>
-        <p class="pie-verdict" id="shPlanVerdict"></p>
-      </div>`;
-  }
-
-  // ek Result in area ki ek line: sab employees chune hon to us area ke sabke Planned / Actual jod ke
-  const byArea = new Map();
-  for (const r of rows) {
-    if (!(r.planned > 0)) continue;
-    const a = byArea.get(r.area) || { area: r.area, plan: 0, act: 0 };
-    a.plan += r.planned; a.act += r.actualDone || 0;
-    byArea.set(r.area, a);
-  }
-  const pts = [...byArea.values()];
-  const who = state.selectedEmp === "__ALL__" ? "All employees" : state.selectedEmp;
-  const show = (v) => (v === null ? "–" : `${+v.toFixed(1)}%`);
-  const GREEN = "#2f9e4f", RED = "#b4372f"; // Planned hara, Actual laal
-
-  const totPlan = pts.reduce((s, p) => s + p.plan, 0), totAct = pts.reduce((s, p) => s + p.act, 0);
-  const totShare = doneShare(totPlan, totAct);
-  // graph ke neeche date: sheet ke pehle week se aakhri week tak (Planned / Actual poori sheet ka total hai)
-  const dated = state.data.weeks.filter((w) => w.date);
-  const dateText = dated.length
-    ? `Date: ${dated[0].label}${dated.length > 1 ? ` – ${dated[dated.length - 1].label}` : ""}`
-    : `Date: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}`;
-  $("#shPieInfo").textContent = `${who} · ${pts.length} result in area`;
-  $("#shPlanCalc").innerHTML = `Planned: <b class="plan">${fmt(totPlan)}</b> &nbsp;vs&nbsp; Actual: <b class="act">${fmt(totAct)}</b> &nbsp;·&nbsp; Actual = <b>${show(totShare)}</b> of planned`;
-
-  // ek hi screen mein: khade bar, neeche area ke naam; bahut saare area hon (All employees) tabhi side mein scroll
-  $("#shPlanWrap").style.width = `max(100%, ${pts.length * 92}px)`;
-  // poora naam, kaata nahi; lamba ho to shabdon ke hisaab se 2-3 line mein
-  const wrap = (a) => {
-    const lines = [];
-    for (const w of String(a).split(/\s+/)) {
-      const last = lines[lines.length - 1];
-      if (last && (last + " " + w).length <= 14) lines[lines.length - 1] = last + " " + w;
-      else lines.push(w);
-    }
-    return lines;
-  };
-  drawChart("shPlanChart", {
-    type: "bar",
-    data: {
-      labels: pts.map((p) => wrap(p.area)), // sirf task ka poora naam
-      datasets: [
-        { label: "Planned", data: pts.map((p) => p.plan), borderColor: GREEN, backgroundColor: GREEN, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
-        { label: "Actual", data: pts.map((p) => p.act), borderColor: RED, backgroundColor: RED, borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.75 },
-      ],
-    },
-    options: {
-      layout: { padding: { top: 16 } },
-      plugins: {
-        legend: { position: "top" },
-        tooltip: { callbacks: { title: (items) => pts[items[0].dataIndex].area, label: (ctx) => {
-          const p = pts[ctx.dataIndex];
-          return ctx.datasetIndex === 0 ? `Planned: ${fmt(p.plan)}` : `Actual: ${fmt(p.act)} (${show(doneShare(p.plan, p.act))})`;
-        } } },
-      },
-      scales: {
-        x: { title: { display: true, text: ["Result in area", dateText], font: { weight: "600" } }, grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 11, weight: "600" } } },
-        y: { beginAtZero: true, grace: "8%", title: { display: true, text: "Planned / Actual" }, grid: { color: "#eef1f5" } },
-      },
-    },
-    plugins: [pointLabels],
-  });
-
-  const v = $("#shPlanVerdict");
-  if (!pts.length) {
-    v.className = "pie-verdict";
-    v.textContent = `${who} ka koi Result in area planned nahi hai.`;
-  } else {
-    const less = pts.filter((p) => p.act < p.plan).length;
-    v.className = `pie-verdict ${totAct < totPlan ? "bad" : "good"}`;
-    v.textContent = totAct < totPlan
-      ? `${who}: ${fmt(totPlan)} planned mein se ${fmt(totAct)} actual (${show(totShare)}). ${fmt(totPlan - totAct)} baaki, ${less} result in area mein planned se kam.`
-      : `${who}: saara planned kaam pura (${fmt(totAct)} / ${fmt(totPlan)}).`;
-  }
-}
 
 function freezeFixedCols() {
   const ths = [...document.querySelectorAll("#sheetTable thead th.fx")];

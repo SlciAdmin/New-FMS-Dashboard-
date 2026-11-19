@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=202610289" />
+  <link rel="stylesheet" href="style.css?v=2026111920" />
 </head>
 <body>
   <!-- Header: logo + naam -->
@@ -119,23 +119,49 @@
       <!-- SHEET VIEW -->
       <section id="view-sheet" class="view active">
         <div class="panel">
-          <div class="panel-head"><h2>Planned vs Actual</h2><div class="controls"><span class="muted small" id="shPieInfo"></span></div></div>
-          <div id="shPlan"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h2>Weekly performance: Not Done vs Delay</h2><div class="controls"><span class="muted small" id="trInfo"></span></div></div>
+          <div class="panel-head"><h2>Weekly performance</h2><div class="controls"><span class="muted small" id="trInfo"></span></div></div>
           <div class="tr-filters">
             <label>Employee <select id="trEmp" aria-label="Employee"></select></label>
             <label>Start week <select id="trStart" aria-label="Start week"></select></label>
             <label>End week <select id="trEnd" aria-label="End week"></select></label>
-            <label>Data <select id="trSrc" aria-label="Data"><option value="score">Actual</option><option value="commit">Commitment</option></select></label>
+            <label>Task <select id="trTask" aria-label="Task"></select></label>
           </div>
           <div class="tr-weeks">
             <span class="tr-weeks-head">Weeks <button type="button" class="tr-link" id="trAll">Sab chuno</button><button type="button" class="tr-link" id="trNone">Sab hatao</button></span>
             <div id="trWeeks" class="tr-chips"></div>
           </div>
           <div class="kpis tr-kpis" id="trKpis"></div>
-          <div class="line-chart tr-chart"><canvas id="trChart"></canvas><div class="tr-empty" id="trEmpty" hidden></div></div>
+          <p class="tr-empty" id="trEmpty" hidden></p>
+          <div class="tr-grid">
+            <div class="tr-card">
+              <div class="tr-head">
+                <h3><span class="tr-num">1</span>Planned vs Actual</h3>
+                <div class="tr-keys"><span class="tr-key k-plan"><i></i>Planned</span><span class="tr-key k-act"><i></i>Actual</span><span class="tr-sub muted small"></span></div>
+              </div>
+              <div class="tr-wrap"><div class="tr-scroll"><div class="line-chart tr-chart"><canvas id="trChart1"></canvas></div></div><canvas class="tr-yaxis" data-for="trChart1" aria-hidden="true"></canvas></div>
+            </div>
+            <div class="tr-card">
+              <div class="tr-head">
+                <h3><span class="tr-num">2</span>Actual Delay</h3>
+                <div class="tr-keys"><span class="tr-key k-dl"><i></i>Actual Delay</span><span class="tr-sub muted small"></span></div>
+              </div>
+              <div class="tr-wrap"><div class="tr-scroll"><div class="line-chart tr-chart"><canvas id="trChart2"></canvas></div></div><canvas class="tr-yaxis" data-for="trChart2" aria-hidden="true"></canvas></div>
+            </div>
+            <div class="tr-card">
+              <div class="tr-head">
+                <h3><span class="tr-num">3</span>Commitment Not Done</h3>
+                <div class="tr-keys"><span class="tr-key k-nd"><i></i>Commitment Not Done</span><span class="tr-sub muted small"></span></div>
+              </div>
+              <div class="tr-wrap"><div class="tr-scroll"><div class="line-chart tr-chart"><canvas id="trChart3"></canvas></div></div><canvas class="tr-yaxis" data-for="trChart3" aria-hidden="true"></canvas></div>
+            </div>
+            <div class="tr-card">
+              <div class="tr-head">
+                <h3><span class="tr-num">4</span>Commitment Delay</h3>
+                <div class="tr-keys"><span class="tr-key k-cdl"><i></i>Commitment Delay</span><span class="tr-sub muted small"></span></div>
+              </div>
+              <div class="tr-wrap"><div class="tr-scroll"><div class="line-chart tr-chart"><canvas id="trChart4"></canvas></div></div><canvas class="tr-yaxis" data-for="trChart4" aria-hidden="true"></canvas></div>
+            </div>
+          </div>
           <p class="pie-verdict" id="trVerdict"></p>
         </div>
         <div class="panel sheet-panel">
@@ -184,6 +210,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="script.js?v=202610289"></script>
+  <script src="script.js?v=2026111920"></script>
 </body>
 </html>
